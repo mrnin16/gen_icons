@@ -14,7 +14,7 @@ RUN apt-get update -y \
 
 # Copy workspace metadata + the api workspace's prisma schema (needed for
 # postinstall: prisma generate).
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
