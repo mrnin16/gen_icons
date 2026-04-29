@@ -31,6 +31,13 @@ COPY apps/api apps/api
 # Build the api Next.js app.
 WORKDIR /repo/apps/api
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Prisma validates DATABASE_URL at import time; next build imports all routes
+# including the SVG/sprite handlers which import PrismaClient. Provide a dummy
+# URL so the build succeeds. Railway overrides this with the real value at runtime.
+ARG DATABASE_URL=postgresql://dummy:dummy@dummy:5432/dummy
+ENV DATABASE_URL=$DATABASE_URL
+
 RUN npm run build
 
 # Railway sets PORT for us; next start picks it up.
