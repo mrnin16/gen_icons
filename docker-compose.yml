@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: iconforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: iconforge
+      POSTGRES_PASSWORD: iconforge_dev
+      POSTGRES_DB: iconforge
+    ports:
+      - "5433:5432"
+    volumes:
+      - iconforge_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iconforge -d iconforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  iconforge_pgdata:

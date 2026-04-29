@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Icon {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  svgContent    String   @db.Text
+  category      String
+  style         String
+  tags          String[]
+  isAiGenerated Boolean  @default(false)
+  prompt        String?
+  downloads     Int      @default(0)
+  userId        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([category])
+  @@index([style])
+  @@index([tags], type: Gin)
+  @@index([name])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  icons     Icon[]
+  createdAt DateTime @default(now())
+}

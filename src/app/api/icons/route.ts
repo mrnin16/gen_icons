@@ -1,0 +1,63 @@
+import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { NextResponse, type NextRequest } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const limit = Math.min(120, Math.max(1, parseInt(searchParams.get('limit') || '40', 10)));
+  const search = (searchParams.get('q') || '').trim();
+  const category = searchParams.get('category') || '';
+  const style = searchParams.get('style') || '';
+  const source = searchParams.get('source') || ''; // '' | 'platform' | 'ai'
+  const sort = searchParams.get('sort') || 'popular';
+
+  const where: Prisma.IconWhereInput = {};
+  if (category) where.category = category;
+  if (style) where.style = style;
+  if (source === 'ai') where.isAiGenerated = true;
+  if (source === 'platform') where.isAiGenerated = false;
+
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { tags: { has: search.toLowerCase() } },
+      { prompt: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const orderBy: Prisma.IconOrderByWithRelationInput =
+    sort === 'newest'
+      ? { createdAt: 'desc' }
+      : sort === 'name'
+        ? { name: 'asc' }
+        : { downloads: 'desc' };
+
+  const [icons, total] = await Promise.all([
+    prisma.icon.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * limit,
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        svgContent: true,
+        category: true,
+        style: true,
+        tags: true,
+        isAiGenerated: true,
+        downloads: true,
+      },
+    }),
+    prisma.icon.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    icons,
+    pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+  });
+}
