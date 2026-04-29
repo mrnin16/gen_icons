@@ -1,17 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-/**
- * Allow the web app (and any other client) to call the API cross-origin.
- *
- * - In production, set CORS_ALLOW_ORIGIN to your web app's origin
- *   (e.g. https://web-service.up.railway.app).
- * - When unset, falls back to "*" so anyone can use the public assets
- *   (raw SVGs, sprite, npm tarball install URL).
- */
 const ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || '*';
 
-export function middleware(req: NextRequest) {
-  // Preflight: respond immediately with the CORS headers, no body.
+export function proxy(req: NextRequest) {
   if (req.method === 'OPTIONS') {
     return new NextResponse(null, {
       status: 204,
