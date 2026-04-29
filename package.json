@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "postinstall": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:defaults": "tsx prisma/seed-defaults.ts",
     "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate"
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "predeploy": "prisma migrate deploy && tsx prisma/seed-defaults.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

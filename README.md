@@ -53,20 +53,51 @@ The active provider is set in `src/lib/ai-providers.ts:14` (`ACTIVE_PROVIDER`). 
 
 ## Deploy to Railway
 
-1. **Create a Postgres service** in Railway. It will inject `DATABASE_URL`.
-2. **Add this repo** as a service, point it at the repo root.
-3. **Set env vars** on the app service:
-   - At least one of: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`
-   - Optional model overrides: `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `GROK_MODEL`
-4. **Pre-deploy command** (Railway → Service → Settings → Pre-Deploy Command):
-   ```bash
-   npx prisma migrate deploy && npm run db:seed:defaults
-   ```
-5. **Build / Start** are auto-detected by Railway:
-   - Build: `npm run build`
-   - Start: `npm start`
+This repo ships with a `railway.json` that configures build, start, pre-deploy
+migrations, seeding, and a healthcheck — so the deploy is essentially:
+**create services → set env vars → push**.
 
-The seed is idempotent (skips icons that already exist), so it's safe to run on every deploy.
+### Steps
+
+1. **Create the project on Railway** and add a **Postgres** service. Railway
+   provisions it and gives you a `DATABASE_URL` reference variable.
+2. **Add this repo** as a second service (New → GitHub Repo → pick this repo).
+3. **Set env vars** on the app service (Variables tab):
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | `${{ Postgres.DATABASE_URL }}` *(reference, uses internal URL — faster, no proxy bandwidth)* |
+   | One of the AI keys | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` / `XAI_API_KEY` |
+   | *(optional)* model overrides | `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `GROK_MODEL` |
+
+4. **Deploy.** That's it.
+
+   On every deploy, `railway.json` runs:
+   ```bash
+   npm run db:migrate:deploy   # prisma migrate deploy
+   npm run db:seed:defaults    # seed 1,464 platform icons (idempotent)
+   ```
+
+   then starts the server with `npm start`. Health is checked at
+   `/api/icons/categories`.
+
+### One-time vs ongoing
+
+The seed is idempotent — it only inserts icons whose slug doesn't already
+exist, so re-running on every deploy is cheap (≈5s of indexed lookups) and
+also picks up any new icons you add to `prisma/icon-definitions.ts`.
+
+### Internal vs proxy URLs
+
+Railway exposes a Postgres service via two URLs:
+
+- **Internal** (e.g. `postgres.railway.internal:5432`) — used by other Railway
+  services in the same project. Faster, free of proxy bandwidth.
+- **Public proxy** (e.g. `<host>.proxy.rlwy.net:<port>`) — used to connect from
+  outside Railway, like your laptop or a one-off `psql` session.
+
+Always use the **reference variable** (`${{ Postgres.DATABASE_URL }}`) on the
+app service so it picks the internal URL automatically.
 
 ## Distribute as installable packages
 

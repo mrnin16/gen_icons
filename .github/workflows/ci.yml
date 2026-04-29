@@ -34,10 +34,8 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        # postinstall runs `prisma generate` automatically.
         run: npm ci
-
-      - name: Generate Prisma client
-        run: npx prisma generate
 
       - name: Generate Next.js route types
         run: npx next typegen
