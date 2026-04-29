@@ -6,21 +6,19 @@ on:
   pull_request:
     branches: [main]
 
-# Cancel any in-flight run for the same ref when a new commit is pushed.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    name: Typecheck · Build
+    name: Typecheck + Build (api + web)
     runs-on: ubuntu-latest
 
-    # Build-time only needs prisma generate (no real DB connection); set a
-    # dummy URL so prisma.config.ts loads cleanly.
     env:
+      # Build-time only — prisma generate doesn't connect; npm ci runs the
+      # api workspace's postinstall hook so the schema must be parseable.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_db
-      # Disable Next.js telemetry in CI for a quieter, slightly faster build.
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
@@ -30,18 +28,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
-      - name: Install dependencies
-        # postinstall runs `prisma generate` automatically.
+      - name: Install workspace dependencies
         run: npm ci
 
-      - name: Generate Next.js route types
-        run: npx next typegen
+      - name: Generate Next.js route types (api)
+        run: npm exec --workspace @iconforge/api -- next typegen
+
+      - name: Generate Next.js route types (web)
+        run: npm exec --workspace @iconforge/web -- next typegen
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: |
+          npm exec --workspace @iconforge/api -- tsc --noEmit
+          npm exec --workspace @iconforge/web -- tsc --noEmit
 
-      - name: Build
-        run: npm run build
+      - name: Build api
+        run: npm run build:api
+
+      - name: Build web
+        run: npm run build:web
