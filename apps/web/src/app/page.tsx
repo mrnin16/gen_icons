@@ -12,7 +12,9 @@ import { IconGrid } from '@/components/IconGrid';
 import { Pagination } from '@/components/Pagination';
 import { SkeletonGrid } from '@/components/SkeletonGrid';
 import type { CategoriesResponse, IconDTO, IconsResponse } from '@iconforge/shared';
-import { apiUrl } from '@/lib/api-client';
+import { apiFetch, apiUrl } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { AuthModal } from '@/components/AuthModal';
 
 const IconDetailModal = dynamic(
   () => import('@/components/IconDetailModal').then((m) => m.IconDetailModal),
@@ -27,16 +29,18 @@ const BundleExporter = dynamic(
   { ssr: false },
 );
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
 
 function HomeInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  const { user } = useAuth();
 
   const query = sp.get('q') ?? '';
   const category = sp.get('category') ?? '';
   const style = sp.get('style') ?? '';
   const source = sp.get('source') ?? '';
+  const mine = sp.get('mine') === '1';
   const sort = sp.get('sort') ?? 'popular';
   const page = parseInt(sp.get('page') ?? '1', 10) || 1;
 
@@ -65,9 +69,12 @@ function HomeInner() {
     if (category) u.set('category', category);
     if (style) u.set('style', style);
     if (source) u.set('source', source);
+    if (mine) u.set('mine', '1');
     if (sort) u.set('sort', sort);
+    // Include user id so SWR re-fetches when auth state changes (visibility differs).
+    u.set('_u', user?.id ?? 'anon');
     return apiUrl(`/api/icons?${u.toString()}`);
-  }, [query, category, style, source, sort, page]);
+  }, [query, category, style, source, mine, sort, page, user?.id]);
 
   const { data, isLoading, mutate } = useSWR<IconsResponse>(iconsUrl, fetcher, {
     keepPreviousData: true,
@@ -75,7 +82,7 @@ function HomeInner() {
   });
 
   const { data: catsData, mutate: mutateCats } = useSWR<CategoriesResponse>(
-    apiUrl('/api/icons/categories'),
+    apiUrl(`/api/icons/categories?_u=${user?.id ?? 'anon'}`),
     fetcher,
     { revalidateOnFocus: false },
   );
@@ -96,6 +103,8 @@ function HomeInner() {
   const [selectedIcon, setSelectedIcon] = useState<IconDTO | null>(null);
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [bundleOpen, setBundleOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleGenerated = useCallback(
     (icon: IconDTO) => {
@@ -106,13 +115,20 @@ function HomeInner() {
     [mutate, mutateCats],
   );
 
+  const requestGenerator = useCallback(() => {
+    if (user) setGeneratorOpen(true);
+    else setAuthOpen(true);
+  }, [user]);
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header
         query={query}
         onQueryChange={(q) => updateParams({ q })}
-        onOpenGenerator={() => setGeneratorOpen(true)}
+        onOpenGenerator={requestGenerator}
         onOpenBundle={() => setBundleOpen(true)}
+        onOpenAuth={() => setAuthOpen(true)}
+        onOpenSidebar={() => setSidebarOpen(true)}
       />
 
       <div className="flex flex-1">
@@ -123,25 +139,43 @@ function HomeInner() {
           categoryCounts={categoryCounts}
           totalCount={totalCount}
           onChange={(patch) => updateParams(patch)}
+          mobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 min-w-0 p-6">
+        <main className="flex-1 min-w-0 p-3 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div className="text-sm text-[var(--text-secondary)]">
-              {data ? (
-                <>
-                  Showing{' '}
-                  <span className="text-[var(--text-primary)] font-medium">
-                    {data.icons.length}
-                  </span>{' '}
-                  of{' '}
-                  <span className="text-[var(--text-primary)] font-medium">
-                    {data.pagination.total}
-                  </span>{' '}
-                  icons
-                </>
-              ) : (
-                'Loading…'
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-[var(--text-secondary)]">
+                {data ? (
+                  <>
+                    Showing{' '}
+                    <span className="text-[var(--text-primary)] font-medium">
+                      {data.icons.length}
+                    </span>{' '}
+                    of{' '}
+                    <span className="text-[var(--text-primary)] font-medium">
+                      {data.pagination.total}
+                    </span>{' '}
+                    icons
+                  </>
+                ) : (
+                  'Loading…'
+                )}
+              </div>
+              {user && (
+                <button
+                  onClick={() => updateParams({ mine: mine ? undefined : '1' })}
+                  className={clsx(
+                    'h-7 px-3 rounded-md text-xs font-medium border transition',
+                    mine
+                      ? 'bg-violet-600/20 border-violet-500/50 text-violet-200'
+                      : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+                  )}
+                  title="Show only icons you generated"
+                >
+                  {mine ? '★ My Icons' : '☆ My Icons'}
+                </button>
               )}
             </div>
             <div className="flex items-center gap-1 p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border)]">
@@ -187,6 +221,7 @@ function HomeInner() {
         open={bundleOpen}
         onClose={() => setBundleOpen(false)}
       />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </div>
   );
 }

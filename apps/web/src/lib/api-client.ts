@@ -20,6 +20,14 @@ export function apiUrl(path: string): string {
   return `${base}${tail}`;
 }
 
+/**
+ * fetch() that always includes the session cookie so cross-origin calls from
+ * the web app to the api carry auth. Use this for every API call, not raw fetch.
+ */
+export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(apiUrl(path), { credentials: 'include', ...init });
+}
+
 /** Build a public asset URL (svg / sprite / package tarball) for end-user copy/paste. */
 export function assetUrl(path: string): string {
   if (API_BASE_URL) return apiUrl(path);

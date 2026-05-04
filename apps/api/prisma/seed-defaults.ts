@@ -14,10 +14,19 @@ import {
 } from './style-transformers';
 import { kebabCase } from '@iconforge/shared';
 
-const ICONS_DIR = path.resolve(
-  process.cwd(),
-  'node_modules/lucide-static/icons',
-);
+function findLucideIconsDir(): string {
+  // Walk up from __dirname until we find node_modules/lucide-static/icons
+  let dir = __dirname;
+  for (let i = 0; i < 6; i++) {
+    const candidate = path.join(dir, 'node_modules', 'lucide-static', 'icons');
+    if (fs.existsSync(candidate)) return candidate;
+    dir = path.dirname(dir);
+  }
+  // Fallback: resolve from cwd
+  return path.resolve(process.cwd(), 'node_modules', 'lucide-static', 'icons');
+}
+
+const ICONS_DIR = findLucideIconsDir();
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -75,6 +84,7 @@ async function main() {
             tags: def.tags,
             style,
             isAiGenerated: false,
+            iconType: 'static',
           },
         });
         updated += 1;
@@ -90,6 +100,7 @@ async function main() {
           style,
           tags: def.tags,
           isAiGenerated: false,
+          iconType: 'static',
         },
       });
       created += 1;

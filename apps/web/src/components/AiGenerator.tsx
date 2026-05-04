@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import { STYLES } from '@iconforge/shared';
 import type { IconDTO } from '@iconforge/shared';
-import { apiUrl } from '@/lib/api-client';
+import { apiFetch } from '@/lib/api-client';
 
 type Props = {
   open: boolean;
@@ -26,7 +26,7 @@ export function AiGenerator({ open, onClose, onGenerated }: Props) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(apiUrl('/api/icons/generate'), {
+      const res = await apiFetch('/api/icons/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: p, style }),
@@ -56,7 +56,7 @@ export function AiGenerator({ open, onClose, onGenerated }: Props) {
           onClick={onClose}
         >
           <motion.aside
-            className="absolute right-0 top-0 h-full w-full max-w-md bg-[var(--bg-surface)] border-l border-[var(--border)] shadow-2xl shadow-black/50 flex flex-col"
+            className="absolute right-0 top-0 h-full w-full sm:max-w-md bg-[var(--bg-surface)] border-l border-[var(--border)] shadow-2xl shadow-black/50 flex flex-col"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}

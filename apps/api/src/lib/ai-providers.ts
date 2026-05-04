@@ -7,6 +7,7 @@
  * is set, so the project works with any subset configured.
  */
 import Anthropic from '@anthropic-ai/sdk';
+import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 
@@ -78,21 +79,29 @@ export type ConfiguredProvider = {
   model: string;
 };
 
+function bedrockEnabled(): boolean {
+  return Boolean(process.env.AWS_BEARER_TOKEN_BEDROCK);
+}
+
 export function getConfiguredProviders(): ConfiguredProvider[] {
-  return PROVIDERS.filter((p) => Boolean(process.env[p.envKey])).map((p) => ({
+  return PROVIDERS.filter((p) => isProviderConfigured(p.id)).map((p) => ({
     id: p.id,
     label: p.label,
     description: p.description,
-    model: process.env[p.modelEnvKey] || p.defaultModel,
+    model: modelFor(p.id),
   }));
 }
 
 export function isProviderConfigured(id: ProviderId): boolean {
+  if (id === 'anthropic' && bedrockEnabled()) return true;
   const cfg = PROVIDER_BY_ID[id];
   return cfg ? Boolean(process.env[cfg.envKey]) : false;
 }
 
 export function modelFor(id: ProviderId): string {
+  if (id === 'anthropic' && bedrockEnabled()) {
+    return process.env.BEDROCK_MODEL || 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+  }
   const cfg = PROVIDER_BY_ID[id];
   if (!cfg) throw new Error(`Unknown provider: ${id}`);
   return process.env[cfg.modelEnvKey] || cfg.defaultModel;
@@ -121,16 +130,22 @@ function extractSvg(rawText: string): string | null {
 }
 
 // ─── Anthropic ─────────────────────────────────────────────────────────────
+// When AWS_BEARER_TOKEN_BEDROCK is set, route through AWS Bedrock instead of
+// Anthropic's first-party API. The Bedrock SDK auto-reads the bearer token
+// and AWS_REGION from env. BEDROCK_MODEL controls the model id (Bedrock uses
+// fully-qualified ids like "us.anthropic.claude-sonnet-4-5-20250929-v1:0").
 async function withAnthropic(input: GenerateInput): Promise<GenerateOutput> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const message = await client.messages.create({
+  const params = {
     model: modelFor('anthropic'),
     max_tokens: MAX_TOKENS,
     system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage(input) }],
-  });
+    messages: [{ role: 'user' as const, content: userMessage(input) }],
+  };
+  const message = bedrockEnabled()
+    ? await new AnthropicBedrock().messages.create(params)
+    : await new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }).messages.create(params);
   const rawText = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .filter((b): b is { type: 'text'; text: string } & typeof b => b.type === 'text')
     .map((b) => b.text)
     .join('');
   const svg = extractSvg(rawText);

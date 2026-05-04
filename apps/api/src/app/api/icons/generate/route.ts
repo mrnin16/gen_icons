@@ -5,6 +5,7 @@ import {
   generateWithFallback,
   modelFor,
 } from '@/lib/ai-providers';
+import { getCurrentUser } from '@/lib/auth';
 import { stripBackgroundRect, kebabCase } from '@iconforge/shared';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -23,6 +24,14 @@ function rateLimit(key: string, max: number, windowMs: number): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Sign in to generate icons' },
+      { status: 401 },
+    );
+  }
+
   const chain = fallbackChain();
   if (chain.length === 0) {
     return NextResponse.json(
@@ -34,8 +43,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'local';
-  if (!rateLimit(`gen:${ip}`, 10, 60_000)) {
+  if (!rateLimit(`gen:${user.id}`, 10, 60_000)) {
     return NextResponse.json(
       { error: 'Rate limit exceeded — max 10 generations per minute' },
       { status: 429 },
@@ -78,6 +86,7 @@ export async function POST(req: NextRequest) {
         tags: prompt.toLowerCase().split(/\s+/).filter(Boolean),
         isAiGenerated: true,
         prompt,
+        userId: user.id,
       },
     });
 

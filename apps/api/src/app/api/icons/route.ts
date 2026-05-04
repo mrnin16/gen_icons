@@ -2,6 +2,8 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { getCurrentUser } from '@/lib/auth';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
@@ -11,22 +13,39 @@ export async function GET(req: NextRequest) {
   const search = (searchParams.get('q') || '').trim();
   const category = searchParams.get('category') || '';
   const style = searchParams.get('style') || '';
-  const source = searchParams.get('source') || ''; // '' | 'platform' | 'ai'
+  const source = searchParams.get('source') || ''; // '' | 'platform' | 'ai' | 'animated'
+  const mine = searchParams.get('mine') === '1';
   const sort = searchParams.get('sort') || 'popular';
 
-  const where: Prisma.IconWhereInput = {};
-  if (category) where.category = category;
-  if (style) where.style = style;
-  if (source === 'ai') where.isAiGenerated = true;
-  if (source === 'platform') where.isAiGenerated = false;
+  const user = await getCurrentUser();
+
+  const filters: Prisma.IconWhereInput = {};
+  if (category) filters.category = category;
+  if (style) filters.style = style;
+  if (source === 'ai') filters.isAiGenerated = true;
+  if (source === 'platform') { filters.isAiGenerated = false; filters.iconType = 'static'; }
+  if (source === 'animated') filters.iconType = 'animated';
 
   if (search) {
-    where.OR = [
+    filters.OR = [
       { name: { contains: search, mode: 'insensitive' } },
       { tags: { has: search.toLowerCase() } },
       { prompt: { contains: search, mode: 'insensitive' } },
     ];
   }
+
+  // Visibility: platform defaults (isAiGenerated=false) are public; AI icons are
+  // private to their owner. Admins see everything. `?mine=1` narrows to icons
+  // the current user owns.
+  const visibility: Prisma.IconWhereInput | null = mine
+    ? user ? { userId: user.id } : { id: '__no_match__' }
+    : user?.role === 'ADMIN' ? null
+    : user ? { OR: [{ isAiGenerated: false }, { userId: user.id }] }
+    : { isAiGenerated: false };
+
+  const where: Prisma.IconWhereInput = visibility
+    ? { AND: [visibility, filters] }
+    : filters;
 
   const orderBy: Prisma.IconOrderByWithRelationInput =
     sort === 'newest'
@@ -50,6 +69,8 @@ export async function GET(req: NextRequest) {
         style: true,
         tags: true,
         isAiGenerated: true,
+        iconType: true,
+        animationData: true,
         downloads: true,
       },
     }),

@@ -15,6 +15,8 @@ model Icon {
   style         String
   tags          String[]
   isAiGenerated Boolean  @default(false)
+  iconType      String   @default("static")
+  animationData String?  @db.Text
   prompt        String?
   downloads     Int      @default(0)
   userId        String?
@@ -25,14 +27,22 @@ model Icon {
 
   @@index([category])
   @@index([style])
+  @@index([iconType])
   @@index([tags], type: Gin)
   @@index([name])
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  icons     Icon[]
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         Role     @default(USER)
+  icons        Icon[]
+  createdAt    DateTime @default(now())
 }

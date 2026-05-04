@@ -16,10 +16,19 @@ export const CATEGORIES: CategoryMeta[] = [
   { slug: 'travel', label: 'Travel', emoji: '✈️' },
   { slug: 'entertainment', label: 'Entertainment', emoji: '🎮' },
   { slug: 'sports', label: 'Sports', emoji: '⚽' },
+  { slug: 'home-lifestyle', label: 'Home & Lifestyle', emoji: '🏠' },
+  { slug: 'animals', label: 'Animals', emoji: '🐾' },
+  { slug: 'shopping', label: 'Shopping', emoji: '🛒' },
+  { slug: 'weather', label: 'Weather', emoji: '⛅' },
+  { slug: 'maps', label: 'Maps & Navigation', emoji: '🗺️' },
+  { slug: 'gaming', label: 'Gaming', emoji: '🎮' },
+  { slug: 'finance', label: 'Finance', emoji: '💰' },
+  { slug: 'science', label: 'Science', emoji: '🔬' },
   { slug: 'arrows-navigation', label: 'Arrows & Navigation', emoji: '➡️' },
   { slug: 'files-documents', label: 'Files & Documents', emoji: '📄' },
   { slug: 'security', label: 'Security', emoji: '🔒' },
   { slug: 'design-tools', label: 'Design Tools', emoji: '🎨' },
+  { slug: 'animated', label: 'Animated', emoji: '✨' },
 ];
 
 export const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
@@ -38,4 +47,5 @@ export const STYLES: StyleMeta[] = [
   { slug: '3d-clay', label: '3D Clay' },
   { slug: 'neon-glow', label: 'Neon Glow' },
   { slug: 'line-art', label: 'Line Art' },
+  { slug: 'animated', label: 'Animated' },
 ];

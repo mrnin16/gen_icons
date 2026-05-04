@@ -1,13 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import { type NextRequest } from 'next/server';
 
+import { getCurrentUser } from '@/lib/auth';
+
 export const dynamic = 'force-dynamic';
 
 /**
- * Public direct-use SVG endpoint.
+ * Public direct-use SVG endpoint for platform-default icons.
  *
  * Usage from anywhere: `<img src="http://localhost:3000/svg/laptop-line-art" />`
- * Returns the raw SVG body with the right Content-Type and permissive CORS.
+ * Owner-private AI icons require the owner's session cookie (or admin).
  */
 export async function GET(
   _req: NextRequest,
@@ -18,20 +20,30 @@ export async function GET(
 
   const icon = await prisma.icon.findUnique({
     where: { slug },
-    select: { svgContent: true },
+    select: { svgContent: true, userId: true, isAiGenerated: true },
   });
 
-  if (!icon) {
-    return new Response(`<!-- icon not found: ${slug} -->`, {
+  const notFound = () =>
+    new Response(`<!-- icon not found: ${slug} -->`, {
       status: 404,
       headers: { 'content-type': 'image/svg+xml; charset=utf-8' },
     });
+
+  if (!icon) return notFound();
+
+  if (icon.isAiGenerated) {
+    const user = await getCurrentUser();
+    if (!user || (user.role !== 'ADMIN' && user.id !== icon.userId)) {
+      return notFound();
+    }
   }
 
   return new Response(icon.svgContent, {
     headers: {
       'content-type': 'image/svg+xml; charset=utf-8',
-      'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
+      'cache-control': icon.isAiGenerated
+        ? 'private, no-store'
+        : 'public, max-age=3600, stale-while-revalidate=86400',
       'access-control-allow-origin': '*',
     },
   });

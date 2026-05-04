@@ -9,6 +9,8 @@ type Props = {
 };
 
 function IconCardImpl({ icon, onClick }: Props) {
+  const isAnimated = icon.iconType === 'animated';
+
   return (
     <button
       type="button"
@@ -16,7 +18,12 @@ function IconCardImpl({ icon, onClick }: Props) {
       className="group relative aspect-square flex flex-col items-center justify-between gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/40 transition text-left"
       title={icon.name}
     >
-      {icon.isAiGenerated && (
+      {isAnimated && (
+        <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+          ✨
+        </span>
+      )}
+      {!isAnimated && icon.isAiGenerated && (
         <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
           AI
         </span>
@@ -27,7 +34,7 @@ function IconCardImpl({ icon, onClick }: Props) {
         dangerouslySetInnerHTML={{
           __html: icon.svgContent.replace(
             /<svg([^>]*)>/i,
-            '<svg$1 width="56" height="56" style="max-width:100%;height:auto;">',
+            '<svg$1 width="48" height="48" style="max-width:100%;height:auto;">',
           ),
         }}
       />

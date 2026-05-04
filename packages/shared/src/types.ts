@@ -7,6 +7,8 @@ export type IconDTO = {
   style: string;
   tags: string[];
   isAiGenerated: boolean;
+  iconType: string;
+  animationData?: string | null;
   downloads: number;
 };
 

@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
@@ -24,9 +25,14 @@ import {
 } from '@/lib/customize-svg';
 import { assetUrl } from '@/lib/api-client';
 
+const AnimationPlayer = dynamic(
+  () => import('@/components/AnimationPlayer').then(m => m.AnimationPlayer),
+  { ssr: false },
+);
+
 const SIZE_SNAPS = [16, 24, 32, 48, 64, 96, 128, 256, 512, 1024];
 
-type Tab = 'download' | 'code';
+type Tab = 'download' | 'code' | 'animate';
 
 type Props = {
   icon: IconDTO | null;
@@ -40,7 +46,7 @@ function nearestSnap(v: number): number {
 }
 
 export function IconDetailModal({ icon, onClose }: Props) {
-  const [size, setSize] = useState(64);
+  const [size, setSize] = useState(256);
   const [tab, setTab] = useState<Tab>('download');
   const [framework, setFramework] = useState<FrameworkId>('react');
   const [copied, setCopied] = useState<string | null>(null);
@@ -49,8 +55,8 @@ export function IconDetailModal({ icon, onClose }: Props) {
 
   useEffect(() => {
     if (icon) {
-      setSize(64);
-      setTab('download');
+      setSize(256);
+      setTab(icon.iconType === 'animated' ? 'animate' : 'download');
       setFramework('react');
       setColor(null);
       setStrokeScale(DEFAULT_STROKE_SCALE);
@@ -116,6 +122,23 @@ export function IconDetailModal({ icon, onClose }: Props) {
     if (!f) return;
     downloadText(code, f.filename(icon.name), 'text/plain');
   };
+
+  const handleDownloadLottie = () => {
+    const url = assetUrl(`/api/icons/${icon.slug}/lottie`);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${icon.slug}.json`;
+    a.click();
+  };
+
+  const handleDownloadGif = () => {
+    const url = assetUrl(`/api/icons/${icon.slug}/gif`);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${icon.slug}.gif`;
+    a.click();
+  };
+
   const handleResetCustomize = () => {
     setColor(null);
     setStrokeScale(DEFAULT_STROKE_SCALE);
@@ -134,7 +157,7 @@ export function IconDetailModal({ icon, onClose }: Props) {
     <AnimatePresence>
       {icon && (
         <motion.div
-          className="fixed inset-0 z-50 grid place-items-center p-4 bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -146,9 +169,9 @@ export function IconDetailModal({ icon, onClose }: Props) {
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ type: 'spring', damping: 22, stiffness: 280 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-3xl max-h-[92vh] overflow-y-auto scroll-thin rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl shadow-black/50"
+            className="w-full sm:max-w-3xl max-h-[92vh] overflow-y-auto scroll-thin rounded-t-2xl sm:rounded-2xl border border-[var(--border)] bg-[var(--bg-surface)] shadow-2xl shadow-black/50"
           >
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-surface)] z-10">
+            <div className="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-[var(--border)] sticky top-0 bg-[var(--bg-surface)] z-10">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">{icon.name}</h2>
                 <div className="flex items-center gap-2 mt-1 text-xs">
@@ -171,7 +194,7 @@ export function IconDetailModal({ icon, onClose }: Props) {
               </button>
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="p-4 sm:p-5 space-y-4 sm:space-y-5">
               <div className="bg-checker rounded-xl border border-[var(--border)] aspect-[16/10] grid place-items-center overflow-hidden">
                 <div
                   className="grid place-items-center"
@@ -342,6 +365,19 @@ export function IconDetailModal({ icon, onClose }: Props) {
 
               <section>
                 <div className="inline-flex p-1 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)]">
+                  {icon.iconType === 'animated' && (
+                    <button
+                      onClick={() => setTab('animate')}
+                      className={clsx(
+                        'px-4 h-8 rounded-md text-sm font-medium transition',
+                        tab === 'animate'
+                          ? 'bg-emerald-500 text-white'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+                      )}
+                    >
+                      ✨ Animate
+                    </button>
+                  )}
                   <button
                     onClick={() => setTab('download')}
                     className={clsx(
@@ -362,13 +398,40 @@ export function IconDetailModal({ icon, onClose }: Props) {
                         : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
                     )}
                   >
-                    {'</> Code Snippets'}
+                    {'</> Code'}
                   </button>
                 </div>
 
                 <div className="mt-4">
-                  {tab === 'download' ? (
+                  {tab === 'animate' ? (
+                    <AnimationPlayer icon={icon} />
+                  ) : tab === 'download' ? (
                     <div className="space-y-3">
+                      {icon.iconType === 'animated' && (
+                        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/8 p-3 space-y-2">
+                          <div className="text-[11px] uppercase tracking-wider text-emerald-300 font-semibold">
+                            ✨ Animated Downloads
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={handleDownloadLottie}
+                              className="h-11 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500 hover:text-white border border-emerald-500/30 text-sm font-medium transition text-emerald-300"
+                            >
+                              ↓ Lottie JSON
+                            </button>
+                            <button
+                              onClick={handleDownloadGif}
+                              className="h-11 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500 hover:text-white border border-emerald-500/30 text-sm font-medium transition text-emerald-300"
+                            >
+                              ↓ Animated GIF
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-[var(--text-muted)]">
+                            Lottie JSON works with React, Vue, iOS, Android, and web via lottie-web.
+                            GIF is 128×128 with transparent-compatible palette.
+                          </p>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <button
                           onClick={handleDownloadSvg}

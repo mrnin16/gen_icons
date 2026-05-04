@@ -23,7 +23,7 @@ export function IconGrid({ icons, onSelect }: Props) {
     );
   }
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
       {icons.map((icon) => (
         <IconCard key={icon.id} icon={icon} onClick={onSelect} />
       ))}
