@@ -60,6 +60,14 @@ export const STYLE_PROMPTS: Record<string, string> = {
   • check / draw-on → stroke-dashoffset reveal
   • wave / water → translateX with sine-like cubic-bezier
   • star / twinkle → opacity + scale pulse with delay
+  • box opens / popup → lid rotates open (rotate around hinge), text/contents pop out
+    (translateY + scale 0→1 + opacity 0→1, with a small delay so it appears AFTER the lid opens)
+  • text reveal → fade-in + slide-in (opacity 0→1 + translateY 8px→0), or
+    a typewriter effect via clip-path / stroke-dashoffset, or scale-pop (scale 0.6→1.1→1)
+- When the prompt asks for words ("with the text X", 'showing "..."'), render those words
+  with <text> inside the SVG and animate them as part of the loop — see the patterns above.
+  Use font-family="system-ui, sans-serif", text-anchor="middle" centered around x=60, and
+  pick a size that fits inside the viewBox (typically 10–18px).
 - Animation MUST loop infinitely (use 'infinite').
 - Duration: 1.5–3s per cycle for most icons; 0.6–1s for fast actions.
 - Set transform-origin so rotations/scales pivot naturally (e.g. "transform-origin: 60px 60px;").
@@ -78,7 +86,7 @@ CRITICAL RULES:
 5. Immediately recognizable, clear subject.
 6. Consistent visual weight and balance.
 7. Use <defs> for gradients/filters. Inline <style> blocks are allowed and required for the animated style.
-8. Do NOT include text elements.
+8. Do NOT include decorative text labels. ONLY include <text> elements when the user prompt explicitly asks for words/letters/numbers (e.g. "with the words 'No Data'", "showing 'NEW'", "with the number 42"). When you do include text, render it via <text> with a system-safe font-family (e.g. font-family="system-ui, sans-serif"), size it relative to the 120×120 viewBox, and keep it short (≤ 24 chars).
 9. TRANSPARENT background: NO background rect. NO fill on root <svg>. NO style="background:..." on <svg>.
 10. Start with <svg, end with </svg>.`;
 
