@@ -46,6 +46,26 @@ export const STYLE_PROMPTS: Record<string, string> = {
 - No fills — pure linework only
 - Refined editorial illustration quality
 - TRANSPARENT background — NO background rectangle or fill`,
+
+  animated: `Self-contained animated SVG using embedded CSS keyframes:
+- Visually similar to "flat-modern": clean geometric shapes, 2-3 solid colors, no gradients.
+  Pick a palette appropriate to the subject (e.g. warm reds/oranges for fire, cool blues for water).
+- Embed an inline <style> block INSIDE the <svg> defining @keyframes for each motion.
+- Apply animations via 'style="animation: name 2s ease-in-out infinite"' on elements or <g> wrappers.
+- Pick motion that fits the subject described in the prompt:
+  • rocket / launch → vertical bob (translateY) + flame flicker (scaleY + opacity)
+  • spinner / loader → continuous rotation (linear, infinite)
+  • heart / pulse → scale heartbeat (1 → 1.15 → 1, ease-in-out)
+  • bell / ring → small rotation wobble (-15deg ↔ 15deg)
+  • check / draw-on → stroke-dashoffset reveal
+  • wave / water → translateX with sine-like cubic-bezier
+  • star / twinkle → opacity + scale pulse with delay
+- Animation MUST loop infinitely (use 'infinite').
+- Duration: 1.5–3s per cycle for most icons; 0.6–1s for fast actions.
+- Set transform-origin so rotations/scales pivot naturally (e.g. "transform-origin: 60px 60px;").
+- Keep total SVG small — no more than 6–8 animated elements.
+- viewBox="0 0 120 120" with TRANSPARENT background.
+- Self-contained: no external assets, no scripts.`,
 };
 
 export const SYSTEM_PROMPT = `You are an expert SVG icon designer creating beautiful, consistent, production-ready SVG icons.
@@ -57,7 +77,7 @@ CRITICAL RULES:
 4. Keep SVG clean and optimized — minimal elements.
 5. Immediately recognizable, clear subject.
 6. Consistent visual weight and balance.
-7. Use <defs> for gradients/filters.
+7. Use <defs> for gradients/filters. Inline <style> blocks are allowed and required for the animated style.
 8. Do NOT include text elements.
 9. TRANSPARENT background: NO background rect. NO fill on root <svg>. NO style="background:..." on <svg>.
 10. Start with <svg, end with </svg>.`;

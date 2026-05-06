@@ -87,11 +87,22 @@ export function AiGenerator({ open, onClose, onGenerated }: Props) {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value.slice(0, 200))}
-                  placeholder="Describe your icon — e.g. a rocket ship, headphones, coffee cup"
+                  placeholder={
+                    style === 'animated'
+                      ? 'Describe both the icon and how it should move — e.g. "rocket lifting off with flickering flames", "heart with a pulse beat", "loading spinner"'
+                      : 'Describe your icon — e.g. a rocket ship, headphones, coffee cup'
+                  }
                   className="w-full h-28 p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] resize-none"
                 />
-                <div className="text-right text-[10px] text-[var(--text-muted)] mt-1">
-                  {prompt.length}/200
+                <div className="flex justify-between items-center mt-1">
+                  {style === 'animated' ? (
+                    <span className="text-[10px] text-emerald-300/80">
+                      ✨ Tip: include the motion you want (loop, pulse, spin, bob, draw-on…)
+                    </span>
+                  ) : <span />}
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {prompt.length}/200
+                  </span>
                 </div>
               </div>
 

@@ -53,15 +53,21 @@ export function IconDetailModal({ icon, onClose }: Props) {
   const [color, setColor] = useState<string | null>(null);
   const [strokeScale, setStrokeScale] = useState<number>(DEFAULT_STROKE_SCALE);
 
+  // Lottie playback (Animate tab) requires real animationData. Pre-built
+  // animated icons ship Lottie JSON; AI-generated animated icons rely on
+  // CSS @keyframes baked into svgContent and self-animate in the inline
+  // preview, so we skip the Lottie tab for those.
+  const hasLottie = !!icon?.animationData;
+
   useEffect(() => {
     if (icon) {
       setSize(256);
-      setTab(icon.iconType === 'animated' ? 'animate' : 'download');
+      setTab(hasLottie ? 'animate' : 'download');
       setFramework('react');
       setColor(null);
       setStrokeScale(DEFAULT_STROKE_SCALE);
     }
-  }, [icon?.id]);
+  }, [icon?.id, hasLottie]);
 
   useEffect(() => {
     if (!icon) return;
@@ -365,7 +371,7 @@ export function IconDetailModal({ icon, onClose }: Props) {
 
               <section>
                 <div className="inline-flex p-1 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border)]">
-                  {icon.iconType === 'animated' && (
+                  {hasLottie && (
                     <button
                       onClick={() => setTab('animate')}
                       className={clsx(
@@ -407,7 +413,7 @@ export function IconDetailModal({ icon, onClose }: Props) {
                     <AnimationPlayer icon={icon} />
                   ) : tab === 'download' ? (
                     <div className="space-y-3">
-                      {icon.iconType === 'animated' && (
+                      {hasLottie && (
                         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/8 p-3 space-y-2">
                           <div className="text-[11px] uppercase tracking-wider text-emerald-300 font-semibold">
                             ✨ Animated Downloads

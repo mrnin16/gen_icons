@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
     const result = await generateWithFallback({ prompt, style });
     const svg = stripBackgroundRect(result.svg);
     const slug = `${kebabCase(prompt)}-${style}-${Date.now().toString(36)}`;
-    const category = detectCategory(prompt);
+    const isAnimated = style === 'animated';
+    const category = isAnimated ? 'animated' : detectCategory(prompt);
 
     const icon = await prisma.icon.create({
       data: {
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
         style,
         tags: prompt.toLowerCase().split(/\s+/).filter(Boolean),
         isAiGenerated: true,
+        iconType: isAnimated ? 'animated' : 'static',
         prompt,
         userId: user.id,
       },
