@@ -24,8 +24,11 @@ COPY packages/shared packages/shared
 COPY apps/web apps/web
 
 # Build the web Next.js app. NEXT_PUBLIC_API_URL is baked into the bundle
-# at build time — set it via Railway's build-time env vars.
+# at build time — Railway exposes service env vars as build args, but Docker
+# requires an explicit ARG declaration to surface them inside RUN steps.
 WORKDIR /repo/apps/web
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
