@@ -57,14 +57,15 @@ const EASE_IN_OUT: Ease = { i: { x: [0.42], y: [1]  }, o: { x: [0.58], y: [0] } 
 const EASE_SPRING: Ease = { i: { x: [0.18], y: [1.4]}, o: { x: [0.65], y: [0] } };
 const EASE_LINEAR: Ease = { i: { x: [0.5],  y: [0.5]}, o: { x: [0.5],  y: [0.5]} };
 
-function kf(t: number, s: number[], e: number[], ease: Ease = EASE_IN_OUT) {
+function kf(t: number, s: number[], e?: number[] | Ease, ease: Ease = EASE_IN_OUT) {
   return { t, s, e, ...ease };
 }
 
 function animProp(keyframes: ReturnType<typeof kf>[]) {
   return { a: 1, k: keyframes };
 }
-function staticProp(v: number[] | number) {
+type ShapePathInfo = { i: number[][]; o: number[][]; v: number[][]; c: boolean };
+function staticProp(v: number[] | number | ShapePathInfo) {
   return { a: 0, k: v };
 }
 
