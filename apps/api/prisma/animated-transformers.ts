@@ -1218,6 +1218,430 @@ function rocketLaunch(color = '#8b5cf6', dur = 2000): AnimatedIconSpec {
   };
 }
 
+// ─── 31. Eye Blink ───────────────────────────────────────────────────────────
+//   Eye outline with iris that squeezes closed (scaleY 1 → 0.06 → 1).
+//   Inspired by show/hide-password toggles and watching states.
+
+function eyeBlink(color = '#0ea5e9', dur = 2400): AnimatedIconSpec {
+  const svgContent = SVG(
+    `<style>
+      @keyframes _eb{0%,5%,30%,100%{transform:scaleY(1)}18%,22%{transform:scaleY(0.06)}}
+    </style>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+      stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"
+      style="transform-origin:50% 50%;animation:_eb ${dur}ms cubic-bezier(0.4,0,0.2,1) infinite"/>
+    <circle cx="12" cy="12" r="3"
+      stroke="${color}" stroke-width="2" fill="${color}" fill-opacity="0.18"
+      style="transform-origin:50% 50%;animation:_eb ${dur}ms cubic-bezier(0.4,0,0.2,1) infinite"/>`,
+  );
+  const op = ms2f(dur);
+  const blinkS = animProp([
+    kf(0,[100,100,100]),
+    kf(Math.round(op*0.18),[100,6,100],EASE_IN_OUT),
+    kf(Math.round(op*0.22),[100,6,100],EASE_IN_OUT),
+    kf(Math.round(op*0.30),[100,100,100],EASE_OUT),
+    kf(op,[100,100,100]),
+  ]);
+  const lottie = lottieBase('Eye Blink', dur, [
+    shapeLayer('iris', [groupShape([
+      ellipseShape(0,0,6,6),
+      strokeShape(color,2),
+      fillShape(color,18),
+    ])], baseKS({ s: blinkS }), 0, op),
+    shapeLayer('lid', [groupShape([
+      ellipseShape(0,0,20,12),
+      strokeShape(color,2),
+    ])], baseKS({ s: blinkS }), 0, op),
+  ]);
+  const frames = Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    let sy = 1;
+    if (t > 0.18 && t < 0.22) sy = 0.06;
+    else if (t >= 0.05 && t <= 0.18) sy = 1 - (t - 0.05) / (0.18 - 0.05) * 0.94;
+    else if (t >= 0.22 && t <= 0.30) sy = 0.06 + (t - 0.22) / (0.30 - 0.22) * 0.94;
+    return SVG(
+      `<g transform="translate(12,12) scale(1, ${sy.toFixed(3)}) translate(-12,-12)">
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="12" cy="12" r="3" stroke="${color}" stroke-width="2" fill="${color}" fill-opacity="0.18"/>
+      </g>`,
+    );
+  });
+  return {
+    name: 'Eye Blink', category: 'animated', tags: ['eye','blink','watch','show','hide','password'],
+    slug: 'eye-blink-animated',
+    build: () => ({ svgContent, animationData: JSON.stringify({ lottie, frames, durationMs: dur, colors: [color] }) }),
+  };
+}
+
+// ─── 32. Trash Wiggle ────────────────────────────────────────────────────────
+//   Trash can with lid that lifts and rocks side-to-side. The lid hinge is at
+//   its left edge so the rotation feels like a hand picking it up.
+
+function trashWiggle(color = '#ef4444', dur = 1800): AnimatedIconSpec {
+  const svgContent = SVG(
+    `<style>
+      @keyframes _tw{
+        0%,100%{transform:translateY(0) rotate(0)}
+        20%{transform:translateY(-2px) rotate(-12deg)}
+        40%{transform:translateY(-2px) rotate(10deg)}
+        60%{transform:translateY(-2px) rotate(-6deg)}
+        80%{transform:translateY(0) rotate(0)}
+      }
+      @keyframes _tb{0%,50%,100%{transform:translateY(0)}25%{transform:translateY(-1px)}}
+    </style>
+    <g style="transform-origin:5px 6px;animation:_tw ${dur}ms cubic-bezier(0.4,0,0.2,1) infinite">
+      <path d="M3 6h18" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"
+        stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>
+    <g style="transform-origin:50% 50%;animation:_tb ${dur}ms ease-in-out infinite">
+      <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
+        stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <line x1="10" y1="11" x2="10" y2="17" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="11" x2="14" y2="17" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    </g>`,
+  );
+  const op = ms2f(dur);
+  const lottie = lottieBase('Trash Wiggle', dur, [
+    shapeLayer('lid', [groupShape([
+      rectShape(0, -6, 18, 2),
+      strokeShape(color, 2),
+    ])], {
+      o: staticProp(100), p: staticProp([12, 12, 0]), a: staticProp([-7, -6, 0]),
+      s: staticProp([100, 100, 100]),
+      r: animProp([
+        kf(0,[0]),
+        kf(Math.round(op*0.20),[-12],EASE_IN_OUT),
+        kf(Math.round(op*0.40),[10],EASE_IN_OUT),
+        kf(Math.round(op*0.60),[-6],EASE_IN_OUT),
+        kf(Math.round(op*0.80),[0],EASE_OUT),
+        kf(op,[0]),
+      ]),
+    }, 0, op),
+    shapeLayer('body', [groupShape([
+      rectShape(0, 4, 14, 14, 2),
+      strokeShape(color, 2),
+    ])], baseKS(), 0, op),
+  ]);
+  const frames = Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    let r = 0, ty = 0;
+    if (t < 0.2) { r = -12 * (t / 0.2); ty = -2 * (t / 0.2); }
+    else if (t < 0.4) { r = -12 + 22 * ((t - 0.2) / 0.2); ty = -2; }
+    else if (t < 0.6) { r = 10 - 16 * ((t - 0.4) / 0.2); ty = -2; }
+    else if (t < 0.8) { r = -6 + 6 * ((t - 0.6) / 0.2); ty = -2 + 2 * ((t - 0.6) / 0.2); }
+    return SVG(
+      `<g transform="rotate(${r.toFixed(1)} 5 6) translate(0 ${ty.toFixed(1)})">
+        <path d="M3 6h18" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <path d="M19 6 18 20a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="10" y1="11" x2="10" y2="17" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      <line x1="14" y1="11" x2="14" y2="17" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`,
+    );
+  });
+  return {
+    name: 'Trash Wiggle', category: 'animated', tags: ['trash','delete','remove','bin'],
+    slug: 'trash-wiggle-animated',
+    build: () => ({ svgContent, animationData: JSON.stringify({ lottie, frames, durationMs: dur, colors: [color] }) }),
+  };
+}
+
+// ─── 33. Copy Check ──────────────────────────────────────────────────────────
+//   Page slides into a clipboard, then a check stamps on confirming the copy.
+//   The full loop: empty clipboard → page enters → check appears → fade reset.
+
+function copyCheck(color = '#10b981', dur = 2200): AnimatedIconSpec {
+  const ckLen = 10;
+  const svgContent = SVG(
+    `<style>
+      @keyframes _cs{0%{transform:translate(8px,-8px);opacity:0}30%{transform:translate(0,0);opacity:1}80%,100%{transform:translate(0,0);opacity:1}}
+      @keyframes _ck{0%,50%{stroke-dashoffset:${ckLen}}70%,100%{stroke-dashoffset:0}}
+    </style>
+    <rect x="3" y="6" width="14" height="14" rx="2"
+      stroke="${color}" stroke-width="2" fill="none"/>
+    <g style="animation:_cs ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite">
+      <rect x="7" y="2" width="14" height="14" rx="2"
+        stroke="${color}" stroke-width="2" fill="${color}" fill-opacity="0.10"/>
+      <path d="m11 9 2.5 2.5L18 7" fill="none"
+        stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+        stroke-dasharray="${ckLen}" stroke-dashoffset="${ckLen}"
+        style="animation:_ck ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite"/>
+    </g>`,
+  );
+  const op = ms2f(dur);
+  const lottie = lottieBase('Copy Check', dur, [
+    shapeLayer('clipboard', [groupShape([
+      rectShape(0, 0, 14, 14, 2),
+      strokeShape(color, 2),
+    ])], { ...baseKS(), p: staticProp([10, 13, 0]) }, 0, op),
+    shapeLayer('page', [groupShape([
+      rectShape(0, 0, 14, 14, 2),
+      strokeShape(color, 2),
+      fillShape(color, 10),
+    ])], {
+      o: animProp([kf(0,[0]),kf(Math.round(op*0.30),[100],EASE_OUT),kf(op,[100])]),
+      p: animProp([
+        kf(0,[22, 1, 0]),
+        kf(Math.round(op*0.30),[14, 9, 0],EASE_OUT),
+        kf(op,[14, 9, 0]),
+      ]),
+      a: staticProp([0, 0, 0]),
+      s: staticProp([100, 100, 100]),
+      r: staticProp(0),
+    }, 0, op),
+    shapeLayer('check', [groupShape([
+      { ty:'sh', ks: staticProp({ i:[[0,0],[0,0],[0,0]], o:[[0,0],[0,0],[0,0]], v:[[-3,1],[0,3],[4,-2]], c:false }), nm:'Check' },
+      strokeShape(color, 2),
+      trimShape(animProp([kf(Math.round(op*0.50),[0]),kf(Math.round(op*0.70),[100],EASE_OUT)]), staticProp([100])),
+    ])], { ...baseKS(), p: staticProp([14, 9, 0]) }, 0, op),
+  ]);
+  const frames = Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    const slide = Math.min(1, t / 0.30);
+    const px = 7 + (1 - slide) * 8;
+    const py = 2 - (1 - slide) * 8;
+    const op2 = slide;
+    const ckOff = t < 0.5 ? ckLen : Math.max(0, ckLen * (1 - (t - 0.5) / 0.2));
+    return SVG(
+      `<rect x="3" y="6" width="14" height="14" rx="2" stroke="${color}" stroke-width="2" fill="none"/>
+       <g opacity="${op2.toFixed(2)}">
+         <rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="14" height="14" rx="2" stroke="${color}" stroke-width="2" fill="${color}" fill-opacity="0.10"/>
+         <path d="m${(px+4).toFixed(1)} ${(py+7).toFixed(1)} 2.5 2.5L${(px+11).toFixed(1)} ${(py+5).toFixed(1)}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${ckLen}" stroke-dashoffset="${ckOff.toFixed(1)}"/>
+       </g>`,
+    );
+  });
+  return {
+    name: 'Copy Check', category: 'animated', tags: ['copy','clipboard','duplicate','check'],
+    slug: 'copy-check-animated',
+    build: () => ({ svgContent, animationData: JSON.stringify({ lottie, frames, durationMs: dur, colors: [color] }) }),
+  };
+}
+
+// ─── 34. Sun Moon Toggle ─────────────────────────────────────────────────────
+//   Sun with rays slowly rotates while a crescent moon fades in/out alongside,
+//   evoking a day/night theme toggle that breathes.
+
+function sunMoon(color = '#f59e0b', dur = 3000): AnimatedIconSpec {
+  const svgContent = SVG(
+    `<style>
+      @keyframes _smR{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+      @keyframes _smS{0%,45%{opacity:1;transform:scale(1)}55%,95%{opacity:0;transform:scale(0.7)}100%{opacity:1;transform:scale(1)}}
+      @keyframes _smM{0%,45%{opacity:0;transform:scale(0.7) rotate(-30deg)}55%,95%{opacity:1;transform:scale(1) rotate(0)}100%{opacity:0;transform:scale(0.7) rotate(-30deg)}}
+    </style>
+    <g style="transform-origin:50% 50%;animation:_smS ${dur}ms ease-in-out infinite">
+      <g style="transform-origin:50% 50%;animation:_smR ${dur}ms linear infinite">
+        <circle cx="12" cy="12" r="4" stroke="${color}" stroke-width="2" fill="${color}" fill-opacity="0.18"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+          stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      </g>
+    </g>
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+      stroke="#a78bfa" stroke-width="2" fill="#a78bfa" fill-opacity="0.18" stroke-linecap="round" stroke-linejoin="round"
+      style="transform-origin:50% 50%;animation:_smM ${dur}ms ease-in-out infinite"/>`,
+  );
+  const op = ms2f(dur);
+  const sunO = animProp([
+    kf(0,[100]),
+    kf(Math.round(op*0.45),[100],EASE_IN_OUT),
+    kf(Math.round(op*0.55),[0],EASE_IN_OUT),
+    kf(Math.round(op*0.95),[0]),
+    kf(op,[100],EASE_OUT),
+  ]);
+  const moonO = animProp([
+    kf(0,[0]),
+    kf(Math.round(op*0.45),[0],EASE_IN_OUT),
+    kf(Math.round(op*0.55),[100],EASE_IN_OUT),
+    kf(Math.round(op*0.95),[100]),
+    kf(op,[0],EASE_OUT),
+  ]);
+  const lottie = lottieBase('Sun Moon', dur, [
+    shapeLayer('sun', [groupShape([
+      ellipseShape(0,0,8,8),
+      strokeShape(color, 2),
+      fillShape(color, 18),
+    ])], {
+      o: sunO, p: staticProp([12,12,0]), a: staticProp([0,0,0]),
+      s: staticProp([100,100,100]),
+      r: animProp([kf(0,[0],[360],EASE_LINEAR), kf(op,[360],[360],EASE_LINEAR)]),
+    }, 0, op),
+    shapeLayer('moon', [groupShape([
+      ellipseShape(0,0,16,16),
+      strokeShape('#a78bfa', 2),
+      fillShape('#a78bfa', 18),
+    ])], { o: moonO, p: staticProp([12,12,0]), a: staticProp([0,0,0]), s: staticProp([100,100,100]), r: staticProp(0) }, 0, op),
+  ]);
+  const frames = Array.from({ length: 12 }, (_, i) => {
+    const t = i / 12;
+    const sun = t < 0.45 ? 1 : t < 0.55 ? 1 - (t - 0.45) / 0.10 : t < 0.95 ? 0 : (t - 0.95) / 0.05;
+    const moon = 1 - sun;
+    const rot = t * 360;
+    return SVG(
+      `<g opacity="${sun.toFixed(2)}" transform="rotate(${rot.toFixed(1)} 12 12)">
+        <circle cx="12" cy="12" r="4" stroke="${color}" stroke-width="2" fill="${color}" fill-opacity="0.18"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      </g>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" opacity="${moon.toFixed(2)}" stroke="#a78bfa" stroke-width="2" fill="#a78bfa" fill-opacity="0.18" stroke-linecap="round" stroke-linejoin="round"/>`,
+    );
+  });
+  return {
+    name: 'Sun Moon', category: 'animated', tags: ['sun','moon','theme','dark','light','toggle'],
+    slug: 'sun-moon-animated',
+    build: () => ({ svgContent, animationData: JSON.stringify({ lottie, frames, durationMs: dur, colors: [color, '#a78bfa'] }) }),
+  };
+}
+
+// ─── 35. Battery Charge ──────────────────────────────────────────────────────
+//   Battery shell stays put while the inner fill sweeps 0 → 100%, with a bolt
+//   that gently pulses in scale & opacity. Easing is decisive (ease-out fill,
+//   ease-in-out bolt) to feel like a real charging cycle.
+
+function batteryCharge(color = '#10b981', dur = 1800): AnimatedIconSpec {
+  const svgContent = SVG(
+    `<style>
+      @keyframes _bf{0%{transform:scaleX(0)}80%,100%{transform:scaleX(1)}}
+      @keyframes _bp{0%,100%{opacity:0.8;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}
+    </style>
+    <rect x="2" y="7" width="16" height="10" rx="2"
+      stroke="${color}" stroke-width="2" fill="none"/>
+    <line x1="20" y1="11" x2="20" y2="13" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+    <rect x="3.5" y="8.5" width="13" height="7" rx="1" fill="${color}"
+      style="transform-origin:3.5px 12px;animation:_bf ${dur}ms cubic-bezier(0.4,0,0.2,1) infinite"/>
+    <path d="m11 8-2 6h4l-2 6"
+      stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#fff"
+      style="transform-origin:11px 14px;animation:_bp ${dur}ms ease-in-out infinite"/>`,
+  );
+  const op = ms2f(dur);
+  const lottie = lottieBase('Battery Charge', dur, [
+    shapeLayer('shell', [groupShape([
+      rectShape(0, 0, 16, 10, 2),
+      strokeShape(color, 2),
+    ])], { ...baseKS(), p: staticProp([10, 12, 0]) }, 0, op),
+    shapeLayer('cap', [groupShape([
+      rectShape(0, 0, 2, 2, 0.5),
+      fillShape(color, 100),
+    ])], { ...baseKS(), p: staticProp([20, 12, 0]) }, 0, op),
+    shapeLayer('fill', [groupShape([
+      rectShape(0, 0, 13, 7, 1),
+      fillShape(color, 100),
+    ])], {
+      o: staticProp(100),
+      p: staticProp([3.5, 12, 0]),
+      a: staticProp([-6.5, 0, 0]),
+      s: animProp([kf(0,[0,100,100]),kf(Math.round(op*0.80),[100,100,100],EASE_OUT),kf(op,[100,100,100])]),
+      r: staticProp(0),
+    }, 0, op),
+    shapeLayer('bolt', [groupShape([
+      { ty:'sh', ks: staticProp({ i:[[0,0],[0,0],[0,0],[0,0]], o:[[0,0],[0,0],[0,0],[0,0]], v:[[-1,-3],[-2,3],[1,-1],[1,3]], c:false }), nm:'Bolt' },
+      strokeShape('#ffffff', 2),
+      fillShape('#ffffff', 100),
+    ])], {
+      o: animProp([kf(0,[80]),kf(Math.round(op*0.50),[100],EASE_IN_OUT),kf(op,[80])]),
+      p: staticProp([11, 12, 0]),
+      a: staticProp([0, 0, 0]),
+      s: animProp([kf(0,[100,100,100]),kf(Math.round(op*0.50),[118,118,100],EASE_IN_OUT),kf(op,[100,100,100])]),
+      r: staticProp(0),
+    }, 0, op),
+  ]);
+  const frames = Array.from({ length: 10 }, (_, i) => {
+    const t = i / 9;
+    const fill = Math.min(1, t / 0.8);
+    const w = (13 * fill).toFixed(2);
+    const pulse = 1 + 0.18 * Math.sin(Math.PI * t);
+    const op2 = 0.8 + 0.2 * Math.sin(Math.PI * t);
+    return SVG(
+      `<rect x="2" y="7" width="16" height="10" rx="2" stroke="${color}" stroke-width="2" fill="none"/>
+       <line x1="20" y1="11" x2="20" y2="13" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+       <rect x="3.5" y="8.5" width="${w}" height="7" rx="1" fill="${color}"/>
+       <g transform="translate(11 14) scale(${pulse.toFixed(3)}) translate(-11 -14)" opacity="${op2.toFixed(2)}">
+         <path d="m11 8-2 6h4l-2 6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#fff"/>
+       </g>`,
+    );
+  });
+  return {
+    name: 'Battery Charge', category: 'animated', tags: ['battery','charge','charging','power','energy'],
+    slug: 'battery-charge-animated',
+    build: () => ({ svgContent, animationData: JSON.stringify({ lottie, frames, durationMs: dur, colors: [color] }) }),
+  };
+}
+
+// ─── 36. Trending Up ─────────────────────────────────────────────────────────
+//   Three bars grow from baseline at staggered times, then a diagonal arrow
+//   sweeps up over the bars. Captures "growth" / "metrics rising".
+
+function trendingUp(color = '#10b981', dur = 2000): AnimatedIconSpec {
+  const svgContent = SVG(
+    `<style>
+      @keyframes _b1{0%{transform:scaleY(0)}25%,100%{transform:scaleY(1)}}
+      @keyframes _b2{0%,15%{transform:scaleY(0)}40%,100%{transform:scaleY(1)}}
+      @keyframes _b3{0%,30%{transform:scaleY(0)}60%,100%{transform:scaleY(1)}}
+      @keyframes _ar{0%,55%{stroke-dashoffset:24;opacity:0}65%{opacity:1}90%,100%{stroke-dashoffset:0;opacity:1}}
+    </style>
+    <rect x="4" y="14" width="3" height="6" rx="0.5" fill="${color}"
+      style="transform-origin:5.5px 20px;animation:_b1 ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite"/>
+    <rect x="10.5" y="10" width="3" height="10" rx="0.5" fill="${color}"
+      style="transform-origin:12px 20px;animation:_b2 ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite"/>
+    <rect x="17" y="6" width="3" height="14" rx="0.5" fill="${color}"
+      style="transform-origin:18.5px 20px;animation:_b3 ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite"/>
+    <path d="M3 17 9 11l4 4 8-8"
+      stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"
+      stroke-dasharray="24" stroke-dashoffset="24"
+      style="animation:_ar ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite"/>
+    <polyline points="16,7 21,7 21,12"
+      stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"
+      style="opacity:0;animation:_ar ${dur}ms cubic-bezier(0.16,1,0.3,1) infinite"/>`,
+  );
+  const op = ms2f(dur);
+  function barS(start: number) {
+    return animProp([
+      kf(0,[100,0,100]),
+      kf(Math.round(op*start),[100,0,100],EASE_OUT),
+      kf(Math.round(op*(start+0.25)),[100,100,100],EASE_OUT),
+      kf(op,[100,100,100]),
+    ]);
+  }
+  const lottie = lottieBase('Trending Up', dur, [
+    shapeLayer('bar1', [groupShape([
+      rectShape(0, 0, 3, 6, 0.5),
+      fillShape(color, 100),
+    ])], { ...baseKS(), p: staticProp([5.5, 20, 0]), a: staticProp([0, 3, 0]), s: barS(0) }, 0, op),
+    shapeLayer('bar2', [groupShape([
+      rectShape(0, 0, 3, 10, 0.5),
+      fillShape(color, 100),
+    ])], { ...baseKS(), p: staticProp([12, 20, 0]), a: staticProp([0, 5, 0]), s: barS(0.15) }, 0, op),
+    shapeLayer('bar3', [groupShape([
+      rectShape(0, 0, 3, 14, 0.5),
+      fillShape(color, 100),
+    ])], { ...baseKS(), p: staticProp([18.5, 20, 0]), a: staticProp([0, 7, 0]), s: barS(0.30) }, 0, op),
+    shapeLayer('arrow', [groupShape([
+      { ty:'sh', ks: staticProp({ i:[[0,0],[0,0],[0,0],[0,0]], o:[[0,0],[0,0],[0,0],[0,0]], v:[[-9,5],[-3,-1],[1,3],[9,-5]], c:false }), nm:'Arrow' },
+      strokeShape(color, 2),
+      trimShape(animProp([kf(Math.round(op*0.55),[0]),kf(Math.round(op*0.90),[100],EASE_OUT)]), staticProp([100])),
+    ])], { ...baseKS(), p: staticProp([12, 12, 0]) }, 0, op),
+  ]);
+  const frames = Array.from({ length: 12 }, (_, i) => {
+    const t = i / 12;
+    const s1 = Math.min(1, Math.max(0, (t - 0.0) / 0.25));
+    const s2 = Math.min(1, Math.max(0, (t - 0.15) / 0.25));
+    const s3 = Math.min(1, Math.max(0, (t - 0.30) / 0.30));
+    const arrowVisible = t > 0.55;
+    const arrowProgress = Math.min(1, Math.max(0, (t - 0.55) / 0.35));
+    const dashOffset = 24 * (1 - arrowProgress);
+    return SVG(
+      `<rect x="4" y="${(20 - 6 * s1).toFixed(1)}" width="3" height="${(6 * s1).toFixed(1)}" rx="0.5" fill="${color}"/>
+       <rect x="10.5" y="${(20 - 10 * s2).toFixed(1)}" width="3" height="${(10 * s2).toFixed(1)}" rx="0.5" fill="${color}"/>
+       <rect x="17" y="${(20 - 14 * s3).toFixed(1)}" width="3" height="${(14 * s3).toFixed(1)}" rx="0.5" fill="${color}"/>
+       ${arrowVisible ? `<path d="M3 17 9 11l4 4 8-8" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="24" stroke-dashoffset="${dashOffset.toFixed(1)}"/>
+       <polyline points="16,7 21,7 21,12" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>` : ''}`,
+    );
+  });
+  return {
+    name: 'Trending Up', category: 'animated', tags: ['trending','growth','chart','analytics','rise','arrow'],
+    slug: 'trending-up-animated',
+    build: () => ({ svgContent, animationData: JSON.stringify({ lottie, frames, durationMs: dur, colors: [color] }) }),
+  };
+}
+
 // ─── Catalog ──────────────────────────────────────────────────────────────────
 
 export const ANIMATED_ICONS: AnimatedIconSpec[] = [
@@ -1264,4 +1688,16 @@ export const ANIMATED_ICONS: AnimatedIconSpec[] = [
   mapPinDrop('#ef4444', 1400),
   powerOn('#10b981', 1800),
   rocketLaunch('#8b5cf6', 2000),
+
+  // Lucide-animated inspired set
+  eyeBlink('#0ea5e9', 2400),
+  eyeBlink('#6d28d9', 2800),
+  trashWiggle('#ef4444', 1800),
+  copyCheck('#10b981', 2200),
+  copyCheck('#0ea5e9', 2400),
+  sunMoon('#f59e0b', 3000),
+  batteryCharge('#10b981', 1800),
+  batteryCharge('#f59e0b', 2200),
+  trendingUp('#10b981', 2000),
+  trendingUp('#0ea5e9', 2200),
 ];
