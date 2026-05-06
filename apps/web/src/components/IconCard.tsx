@@ -15,7 +15,7 @@ function IconCardImpl({ icon, onClick }: Props) {
     <button
       type="button"
       onClick={() => onClick(icon)}
-      className="group relative aspect-square flex flex-col items-center justify-between gap-2 p-3 rounded-xl border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/40 transition text-left"
+      className="group relative aspect-square flex flex-col items-center justify-between gap-2 p-3 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/40 transition text-left"
       title={icon.name}
     >
       {isAnimated && (

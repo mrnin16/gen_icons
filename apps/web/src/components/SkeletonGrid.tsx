@@ -4,7 +4,7 @@ export function SkeletonGrid({ count = 24 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="aspect-square rounded-xl skeleton border border-[var(--border)]"
+          className="aspect-square rounded-md skeleton border border-[var(--border)]"
         />
       ))}
     </div>
