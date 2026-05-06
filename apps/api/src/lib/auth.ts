@@ -38,10 +38,15 @@ export async function createSession(user: Pick<User, 'id'>): Promise<void> {
     .setExpirationTime(`${SESSION_TTL_SECONDS}s`)
     .sign(secret());
   const jar = await cookies();
+  const isProd = process.env.NODE_ENV === 'production';
   jar.set(COOKIE_NAME, token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // 'none' is required so the cookie is sent on cross-site fetch from the
+    // web service domain to the api service domain (different subdomains
+    // under up.railway.app, which is on the Public Suffix List → cross-site).
+    // 'none' demands secure: true, which is fine in production.
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   });
