@@ -431,17 +431,7 @@ export default function ForgeUiPage() {
             {!result && !busy && (
               <EmptyState />
             )}
-            {busy && (
-              <div className="absolute inset-0 grid place-items-center text-sm text-[var(--text-muted)]">
-                <div className="space-y-3 text-center">
-                  <div className="w-10 h-10 mx-auto border-2 border-violet-500/30 border-t-violet-400 rounded-full animate-spin" />
-                  <div>Generating {mode === 'slides' ? 'your deck' : 'your page'}…</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">
-                    typically 10–30 seconds
-                  </div>
-                </div>
-              </div>
-            )}
+            {busy && <LoadingForge mode={mode} />}
             {result && view === 'preview' && previewSrcDoc && (
               <iframe
                 ref={iframeRef}
@@ -462,6 +452,194 @@ export default function ForgeUiPage() {
         </main>
       </div>
     </div>
+  );
+}
+
+// ─── Loading animation ───────────────────────────────────────────────────────
+// A wireframe of the UI being assembled, with stroke-draw animations on each
+// block + rotating status messages. Far less boring than a spinner during a
+// 10–30s wait.
+
+const PAGE_STATUSES = [
+  '✨ Sketching layout…',
+  '🎨 Picking the palette…',
+  '🧱 Placing components…',
+  '📐 Tightening spacing…',
+  '🪶 Choosing the typography…',
+  '🔧 Wiring up interactions…',
+  '✅ Polishing the edges…',
+];
+
+const SLIDE_STATUSES = [
+  '🎬 Outlining the deck…',
+  '✏️ Drafting the title slide…',
+  '📊 Composing the data slide…',
+  '💬 Writing the closing line…',
+  '🎨 Picking the palette…',
+  '🪶 Choosing the typography…',
+  '✨ Adding the polish…',
+];
+
+function LoadingForge({ mode }: { mode: Mode }) {
+  const [statusIdx, setStatusIdx] = useState(0);
+  const statuses = mode === 'slides' ? SLIDE_STATUSES : PAGE_STATUSES;
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setStatusIdx((i) => (i + 1) % statuses.length);
+    }, 2200);
+    return () => clearInterval(id);
+  }, [statuses.length]);
+
+  return (
+    <div className="absolute inset-0 grid place-items-center bg-[var(--bg-elevated)] overflow-hidden">
+      {/* soft animated glow */}
+      <div className="pointer-events-none absolute inset-0 opacity-50">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[480px] h-[480px] rounded-full bg-violet-600/30 blur-3xl animate-forge-pulse" />
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center gap-6 px-6">
+        {mode === 'slides' ? <SlidesWireframe /> : <PageWireframe />}
+
+        <div className="space-y-2 text-center">
+          <div
+            key={statusIdx}
+            className="text-sm text-[var(--text-primary)] font-medium animate-forge-fade-in"
+          >
+            {statuses[statusIdx]}
+          </div>
+          <div className="text-[11px] text-[var(--text-muted)] flex items-center justify-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-400 animate-forge-dot" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-400 animate-forge-dot [animation-delay:0.18s]" />
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-400 animate-forge-dot [animation-delay:0.36s]" />
+            <span className="ml-1">typically 10–30 seconds</span>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes forge-draw { from { stroke-dashoffset: var(--len, 200); } to { stroke-dashoffset: 0; } }
+        @keyframes forge-fill-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+        @keyframes forge-pulse { 0%,100% { opacity: 0.35; transform: translate(-50%, 0) scale(1); } 50% { opacity: 0.6; transform: translate(-50%, 0) scale(1.08); } }
+        @keyframes forge-fade-in { 0% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes forge-dot { 0%,80%,100% { opacity: 0.25; transform: scale(1); } 40% { opacity: 1; transform: scale(1.4); } }
+        .forge-draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: forge-draw 1.2s cubic-bezier(0.16,1,0.3,1) infinite alternate; }
+        .forge-fill { transform-origin: left center; animation: forge-fill-grow 1.6s cubic-bezier(0.16,1,0.3,1) infinite alternate; }
+        .animate-forge-pulse { animation: forge-pulse 3s ease-in-out infinite; }
+        .animate-forge-fade-in { animation: forge-fade-in 0.5s ease-out; }
+        .animate-forge-dot { animation: forge-dot 1.2s ease-in-out infinite; }
+      `}</style>
+    </div>
+  );
+}
+
+function PageWireframe() {
+  // Wireframe of a generic page: header bar + hero + 3 cards row + content row.
+  const stroke = 'rgba(167, 139, 250, 0.85)';
+  const fill = 'rgba(167, 139, 250, 0.15)';
+  return (
+    <svg width="320" height="200" viewBox="0 0 320 200" fill="none">
+      {/* Header bar */}
+      <rect x="10" y="10" width="300" height="22" rx="4"
+        stroke={stroke} strokeWidth="1.5" className="forge-draw" style={{ ['--len' as string]: '650' } as React.CSSProperties} />
+      <circle cx="22" cy="21" r="4" fill={stroke} />
+      <rect x="32" y="18" width="42" height="6" rx="2" fill={fill} />
+      <rect x="240" y="17" width="60" height="8" rx="2" fill={fill} />
+
+      {/* Hero block */}
+      <rect x="10" y="42" width="300" height="58" rx="4"
+        stroke={stroke} strokeWidth="1.5" className="forge-draw" style={{ ['--len' as string]: '720', animationDelay: '0.15s' } as React.CSSProperties} />
+      <rect x="22" y="56" width="180" height="8" rx="2" fill={stroke} className="forge-fill" style={{ animationDelay: '0.2s' } as React.CSSProperties} />
+      <rect x="22" y="70" width="240" height="5" rx="2" fill={fill} className="forge-fill" style={{ animationDelay: '0.35s' } as React.CSSProperties} />
+      <rect x="22" y="80" width="200" height="5" rx="2" fill={fill} className="forge-fill" style={{ animationDelay: '0.45s' } as React.CSSProperties} />
+
+      {/* Cards row */}
+      {[0, 1, 2].map((i) => (
+        <g key={i}>
+          <rect
+            x={10 + i * 102} y={110} width="96" height="50" rx="4"
+            stroke={stroke} strokeWidth="1.5" className="forge-draw"
+            style={{ ['--len' as string]: '290', animationDelay: `${0.4 + i * 0.12}s` } as React.CSSProperties}
+          />
+          <circle cx={20 + i * 102} cy={122} r="4" fill={fill} />
+          <rect x={28 + i * 102} y={119} width="48" height="6" rx="2" fill={fill} />
+          <rect x={20 + i * 102} y={138} width="76" height="4" rx="2" fill={fill} />
+          <rect x={20 + i * 102} y={146} width="60" height="4" rx="2" fill={fill} />
+        </g>
+      ))}
+
+      {/* Bottom content */}
+      <rect x="10" y="170" width="300" height="20" rx="4"
+        stroke={stroke} strokeWidth="1.5" className="forge-draw" style={{ ['--len' as string]: '650', animationDelay: '0.8s' } as React.CSSProperties} />
+    </svg>
+  );
+}
+
+function SlidesWireframe() {
+  // Wireframe of a slide deck: 4 slide thumbnails with progress dots.
+  const stroke = 'rgba(167, 139, 250, 0.85)';
+  const fill = 'rgba(167, 139, 250, 0.15)';
+  const slides = [
+    { titleW: 110, hasMark: true, kind: 'title' },
+    { titleW: 60, hasMark: false, kind: 'agenda' },
+    { titleW: 80, hasMark: false, kind: 'data' },
+    { titleW: 90, hasMark: false, kind: 'closing' },
+  ];
+  return (
+    <svg width="320" height="200" viewBox="0 0 320 200" fill="none">
+      {slides.map((s, i) => {
+        const x = 10 + i * 78;
+        return (
+          <g key={i}>
+            <rect
+              x={x} y={20} width="68" height="100" rx="4"
+              stroke={stroke} strokeWidth="1.5" className="forge-draw"
+              style={{ ['--len' as string]: '345', animationDelay: `${i * 0.18}s` } as React.CSSProperties}
+            />
+            {s.kind === 'title' && (
+              <>
+                <rect x={x + 10} y={50} width={s.titleW * 0.5} height="6" rx="2" fill={stroke}
+                  className="forge-fill" style={{ animationDelay: `${i * 0.18 + 0.15}s` } as React.CSSProperties} />
+                <rect x={x + 10} y={60} width={s.titleW * 0.35} height="4" rx="2" fill={fill}
+                  className="forge-fill" style={{ animationDelay: `${i * 0.18 + 0.25}s` } as React.CSSProperties} />
+                <circle cx={x + 16} cy={100} r="3" fill={fill} />
+                <rect x={x + 22} y={97} width={20} height="4" rx="2" fill={fill} />
+              </>
+            )}
+            {s.kind === 'agenda' && [0, 1, 2, 3].map((j) => (
+              <rect key={j} x={x + 10} y={45 + j * 14} width={48} height="4" rx="2" fill={fill}
+                className="forge-fill" style={{ animationDelay: `${i * 0.18 + j * 0.05}s` } as React.CSSProperties} />
+            ))}
+            {s.kind === 'data' && (
+              <>
+                {[16, 22, 14, 28, 12].map((h, j) => (
+                  <rect key={j} x={x + 12 + j * 10} y={108 - h} width={6} height={h} rx="1" fill={stroke}
+                    className="forge-fill" style={{ animationDelay: `${i * 0.18 + j * 0.07}s` } as React.CSSProperties} />
+                ))}
+                <line x1={x + 10} y1={108} x2={x + 60} y2={108} stroke={fill} strokeWidth="1" />
+              </>
+            )}
+            {s.kind === 'closing' && (
+              <>
+                <rect x={x + 12} y={55} width={s.titleW * 0.5} height="6" rx="2" fill={stroke}
+                  className="forge-fill" style={{ animationDelay: `${i * 0.18 + 0.15}s` } as React.CSSProperties} />
+                <rect x={x + 12} y={70} width={42} height="3" rx="1" fill={fill} />
+                <rect x={x + 12} y={78} width={36} height="3" rx="1" fill={fill} />
+                <rect x={x + 12} y={92} width={22} height="10" rx="2" fill={stroke} fillOpacity="0.6" />
+              </>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Progress dots */}
+      <g transform="translate(146, 152)">
+        {[0, 1, 2, 3].map((i) => (
+          <circle key={i} cx={i * 10} cy={0} r="3" fill={fill}
+            className="forge-fill" style={{ animationDelay: `${0.5 + i * 0.18}s`, transformOrigin: `${i * 10}px 0` } as React.CSSProperties} />
+        ))}
+      </g>
+    </svg>
   );
 }
 

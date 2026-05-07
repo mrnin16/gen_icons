@@ -27,6 +27,14 @@ REQUIREMENTS
 - Interactivity is encouraged where it adds value: tab switching, accordion expand, theme toggle, modal open/close, simple form validation.
 - Keep it focused — one cohesive screen, not a collection of unrelated sections.
 
+JSX HYGIENE (avoid parse errors)
+- Comments inside JSX must be wrapped: \`{/* like this */}\`. Never leave bare \`//\` comments inside JSX.
+- Class strings: prefer \`className="..."\` (double quotes). When you need a backtick template, use \`className={\\\`...\\\`}\`.
+- Embed JS expressions in JSX with curly braces: \`{value}\`, \`{cond ? a : b}\`, \`{items.map(...)}\`.
+- Use \`<>...</>\` fragments instead of \`<React.Fragment>\`.
+- The character \`<\` only appears as a tag opener; in text content use \`&lt;\` or wrap in \`{'<'}\`.
+- Don't reference variables that aren't defined (no leftover placeholders like \`PLACEHOLDER\`).
+
 OUTPUT FORMAT
 Return ONLY the JSX source for the App component. No markdown fences, no commentary, no surrounding HTML. Start with \`function App()\` and end with the matching closing brace.`;
 
@@ -52,6 +60,7 @@ CODE REQUIREMENTS
 - Define App as a top-level function: \`function App() { return ( ... ); }\` — no imports, no \`export default\`.
 - Hooks via bare names: \`useState\`, \`useEffect\`, \`useRef\` (provided globally).
 - Self-contained, ≤ 500 lines.
+- JSX hygiene: \`{/* comments */}\` only, double-quoted className, fragments as \`<>...</>\`, no undefined identifiers.
 
 OUTPUT FORMAT
 Return ONLY the JSX source for the App component. No markdown fences, no commentary, no surrounding HTML.`;
@@ -76,6 +85,10 @@ export function deriveTitle(prompt: string): string {
  * Wrap raw App component JSX into a complete HTML document that runs in any
  * browser via React UMD + Babel standalone + Tailwind CDN. This is what the
  * preview iframe shows AND what "Export HTML" downloads.
+ *
+ * Error visibility: if the model produces JSX with a parse error or the
+ * component throws at render time, we display the error inside the iframe
+ * instead of leaving a blank dark page.
  */
 export function wrapAsHtmlDoc(jsx: string, title: string): string {
   // Escape the JSX safely as a script payload — `</script>` is the only thing
@@ -94,17 +107,50 @@ export function wrapAsHtmlDoc(jsx: string, title: string): string {
 <style>
   html, body, #root { height: 100%; }
   body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+  .__forge_err { padding: 24px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #f87171; background: #18181b; border-left: 4px solid #ef4444; max-width: 720px; margin: 32px auto; border-radius: 8px; line-height: 1.5; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+  .__forge_err strong { color: #fca5a5; display: block; margin-bottom: 8px; font-size: 14px; }
 </style>
 </head>
 <body>
 <div id="root"></div>
+<script>
+function __forgeShowError(label, msg) {
+  var root = document.getElementById('root') || document.body;
+  var div = document.createElement('div');
+  div.className = '__forge_err';
+  var s = document.createElement('strong');
+  s.textContent = label;
+  div.appendChild(s);
+  div.appendChild(document.createTextNode(String(msg || 'Unknown error')));
+  root.innerHTML = '';
+  root.appendChild(div);
+}
+window.addEventListener('error', function (event) {
+  __forgeShowError('Render error', (event && (event.message || (event.error && event.error.message))) || event);
+});
+window.addEventListener('unhandledrejection', function (event) {
+  __forgeShowError('Promise rejection', event.reason && (event.reason.message || event.reason));
+});
+// Detect "nothing rendered" silent failures (e.g. Babel parse error eaten).
+setTimeout(function () {
+  var r = document.getElementById('root');
+  if (r && r.children.length === 0 && !document.body.dataset.forgeRendered) {
+    __forgeShowError('Render failed', 'The component compiled but produced no output. Try rephrasing the prompt.');
+  }
+}, 3000);
+</script>
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect, useReducer } = React;
+try {
+  const { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect, useReducer } = React;
 
 ${safe}
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<App />);
+  document.body.dataset.forgeRendered = '1';
+} catch (e) {
+  __forgeShowError('Render error', (e && (e.message || e)) || 'Unknown error');
+}
 </script>
 </body>
 </html>`;
