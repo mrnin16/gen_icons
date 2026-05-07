@@ -53,8 +53,11 @@ export async function POST(req: NextRequest) {
   if (!prompt) {
     return NextResponse.json({ error: 'Prompt required' }, { status: 400 });
   }
-  if (prompt.length > 600) {
-    return NextResponse.json({ error: 'Prompt too long (max 600 chars)' }, { status: 400 });
+  // Soft cap to keep token usage bounded; should be far above any sensible
+  // human-written prompt. Bumped well beyond the previous 600 so the
+  // composer feels unconstrained (Claude-style).
+  if (prompt.length > 8000) {
+    return NextResponse.json({ error: 'Prompt too long (max 8000 chars)' }, { status: 400 });
   }
 
   const isRefine = !!baseJsx && /function\s+App\s*\(/.test(baseJsx);

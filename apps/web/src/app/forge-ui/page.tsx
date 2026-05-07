@@ -96,7 +96,7 @@ export default function ForgeUiPage() {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = '0px';
-    const h = Math.min(ta.scrollHeight, 200);
+    const h = Math.min(ta.scrollHeight, 280);
     ta.style.height = h + 'px';
   }, [draft]);
 
@@ -380,7 +380,7 @@ export default function ForgeUiPage() {
                 <textarea
                   ref={textareaRef}
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value.slice(0, 600))}
+                  onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey && !busy) {
                       e.preventDefault();
@@ -396,7 +396,7 @@ export default function ForgeUiPage() {
                   }
                   rows={1}
                   className="w-full px-4 pt-3 pb-1 bg-transparent resize-none focus:outline-none text-sm text-stone-100 placeholder:text-stone-500 min-h-[42px]"
-                  style={{ maxHeight: 200 }}
+                  style={{ maxHeight: 280 }}
                 />
                 <div className="flex items-center justify-between px-3 pb-2.5 pt-1 gap-2">
                   <div className="flex items-center gap-1.5">
@@ -412,9 +412,6 @@ export default function ForgeUiPage() {
                       onClick={() => setMode('slides')}
                       disabled={hasThread}
                     />
-                    <span className="text-[10px] text-stone-600 ml-1">
-                      {draft.length}/600
-                    </span>
                   </div>
                   <button
                     onClick={() => void submit()}
