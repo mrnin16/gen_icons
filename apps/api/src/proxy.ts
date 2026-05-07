@@ -11,7 +11,7 @@ function applyCors(req: NextRequest, res: NextResponse): NextResponse {
     res.headers.set('Access-Control-Allow-Origin', origin);
     res.headers.set('Vary', 'Origin');
     res.headers.set('Access-Control-Allow-Credentials', 'true');
-    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.headers.set('Access-Control-Max-Age', '86400');
   }
