@@ -69,25 +69,32 @@ export async function POST(req: NextRequest) {
     ? `CURRENT App component:\n\n\`\`\`jsx\n${baseJsx}\n\`\`\`\n\nChange request:\n${prompt}`
     : prompt;
 
+  // Refines have to regenerate the entire component with the change applied,
+  // so they need a larger output budget than first-shot generations.
+  const firstMaxTokens = isRefine ? 16000 : 12000;
+  const retryMaxTokens = isRefine ? 24000 : 16000;
+
   try {
     // First attempt
     let result = await generateTextWithFallback({
       system,
       user: userMessage,
-      maxTokens: 8000,
+      maxTokens: firstMaxTokens,
     });
     let jsx = stripCodeFence(result.text);
     let problem = validateJsx(jsx);
 
-    // One retry with explicit guidance if the first attempt was malformed
-    // (most common cause: token-truncated output that left braces unclosed).
+    // One retry with explicit guidance if the first attempt was malformed.
+    // The most common cause is token-truncated output (model stopped mid-line
+    // because it ran out of budget). Give the retry a larger budget AND tell
+    // the model to be concise so we trade complexity for completeness.
     if (problem) {
       result = await generateTextWithFallback({
         system,
         user:
           userMessage +
-          `\n\nIMPORTANT: your previous output had a problem: ${problem}. Output the COMPLETE App component this time, balancing every brace and ending with the matching \`}\`. Keep it concise enough to fit in your reply.`,
-        maxTokens: 8000,
+          `\n\nIMPORTANT: your previous output had a problem: ${problem}. Output the COMPLETE App component this time, ending with the matching closing \`}\`. If the page is large, simplify lower-priority sections so the FULL component fits in your reply — a complete simpler page beats a truncated detailed one.`,
+        maxTokens: retryMaxTokens,
       });
       jsx = stripCodeFence(result.text);
       problem = validateJsx(jsx);
