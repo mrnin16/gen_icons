@@ -254,6 +254,109 @@ export type GenerateWithFallbackResult = GenerateOutput & {
   attempts: { provider: ProviderId; ok: boolean; error?: string }[];
 };
 
+// ─── Generic text generation (UI generator etc.) ──────────────────────────
+//
+// generateTextWithFallback runs the same provider-fallback dance but for raw
+// text completions — used by features like the UI generator that don't need
+// SVG extraction. The caller supplies the full system + user messages.
+
+export type TextGenerateInput = {
+  system: string;
+  user: string;
+  maxTokens?: number;
+};
+
+async function textWithProvider(provider: ProviderId, input: TextGenerateInput): Promise<string> {
+  const max = input.maxTokens ?? 4000;
+  if (provider === 'anthropic') {
+    const params = {
+      model: modelFor('anthropic'),
+      max_tokens: max,
+      system: input.system,
+      messages: [{ role: 'user' as const, content: input.user }],
+    };
+    const message = bedrockEnabled()
+      ? await new AnthropicBedrock().messages.create(params)
+      : await new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }).messages.create(params);
+    return message.content
+      .filter((b): b is { type: 'text'; text: string } & typeof b => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+  }
+  if (provider === 'openai') {
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const response = await client.chat.completions.create({
+      model: modelFor('openai'),
+      max_completion_tokens: max,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+    });
+    return response.choices[0]?.message?.content ?? '';
+  }
+  if (provider === 'gemini') {
+    const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+    const model = client.getGenerativeModel({
+      model: modelFor('gemini'),
+      systemInstruction: input.system,
+    });
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: input.user }] }],
+      generationConfig: { maxOutputTokens: max, temperature: 0.7 },
+    });
+    return result.response.text();
+  }
+  if (provider === 'grok') {
+    const client = new OpenAI({
+      apiKey: process.env.XAI_API_KEY,
+      baseURL: 'https://api.x.ai/v1',
+    });
+    const response = await client.chat.completions.create({
+      model: modelFor('grok'),
+      max_completion_tokens: max,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+    });
+    return response.choices[0]?.message?.content ?? '';
+  }
+  throw new Error(`Unknown provider: ${provider}`);
+}
+
+export type TextGenerateResult = {
+  text: string;
+  providerUsed: ProviderId;
+  attempts: { provider: ProviderId; ok: boolean; error?: string }[];
+};
+
+export async function generateTextWithFallback(
+  input: TextGenerateInput,
+): Promise<TextGenerateResult> {
+  const chain = fallbackChain();
+  if (chain.length === 0) {
+    throw new Error(
+      'No AI provider is configured. Set at least one of ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, XAI_API_KEY in .env.',
+    );
+  }
+  const attempts: TextGenerateResult['attempts'] = [];
+  for (const id of chain) {
+    try {
+      const text = await textWithProvider(id, input);
+      if (!text || !text.trim()) throw new Error(`${id} returned empty text`);
+      attempts.push({ provider: id, ok: true });
+      return { text, providerUsed: id, attempts };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      attempts.push({ provider: id, ok: false, error: msg });
+      console.warn(`[ai/text] ${id} failed:`, msg);
+    }
+  }
+  const detail = attempts.map((a) => `${a.provider}: ${a.error ?? 'unknown'}`).join(' | ');
+  throw new Error(`All configured providers failed. ${detail}`);
+}
+
 /**
  * Try each configured provider in fallback order until one succeeds.
  * Throws if every provider fails (or none are configured).

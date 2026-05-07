@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/auth-context';
 
@@ -90,6 +91,18 @@ export function Header({
             )}
           </div>
         </div>
+
+        {/* Forge UI — auth-gated, links to the UI generator */}
+        {user && (
+          <Link
+            href="/forge-ui"
+            className="hidden sm:flex h-9 sm:h-10 px-3 sm:px-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-sm font-medium hover:bg-emerald-500/20 transition shrink-0 items-center gap-1.5"
+            title="Generate a full UI page or slide deck with AI"
+          >
+            <span>🎨</span>
+            <span className="hidden lg:inline">Forge UI</span>
+          </Link>
+        )}
 
         {/* Get Package — hidden on xs */}
         <button
