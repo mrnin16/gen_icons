@@ -23,7 +23,7 @@ type GenerationData = {
 
 type Turn =
   | { id: string; role: 'user'; text: string; mode: Mode; isRefine: boolean }
-  | { id: string; role: 'assistant'; status: 'pending' | 'ok' | 'error'; data?: GenerationData; error?: string };
+  | { id: string; role: 'assistant'; status: 'pending' | 'ok' | 'error'; data?: GenerationData; error?: string; sourceUserId?: string };
 
 const STARTERS: { label: string; mode: Mode; prompt: string }[] = [
   {
@@ -108,15 +108,21 @@ export default function ForgeUiPage() {
     const baseJsx = current?.jsx;
     const isRefine = !!baseJsx;
 
+    const userId = `u_${Date.now()}`;
     const userTurn: Turn = {
-      id: `u_${Date.now()}`,
+      id: userId,
       role: 'user',
       text,
       mode: useMode,
       isRefine,
     };
     const assistantId = `a_${Date.now()}`;
-    const assistantPending: Turn = { id: assistantId, role: 'assistant', status: 'pending' };
+    const assistantPending: Turn = {
+      id: assistantId,
+      role: 'assistant',
+      status: 'pending',
+      sourceUserId: userId,
+    };
 
     setTurns((prev) => [...prev, userTurn, assistantPending]);
     setDraft('');
@@ -136,7 +142,7 @@ export default function ForgeUiPage() {
       setTurns((prev) =>
         prev.map((t) =>
           t.id === assistantId
-            ? { id: t.id, role: 'assistant', status: 'ok', data: data as GenerationData }
+            ? { id: t.id, role: 'assistant', status: 'ok', data: data as GenerationData, sourceUserId: userId }
             : t,
         ),
       );
@@ -144,12 +150,31 @@ export default function ForgeUiPage() {
       const msg = e instanceof Error ? e.message : 'Generation failed';
       setTurns((prev) =>
         prev.map((t) =>
-          t.id === assistantId ? { id: t.id, role: 'assistant', status: 'error', error: msg } : t,
+          t.id === assistantId
+            ? { id: t.id, role: 'assistant', status: 'error', error: msg, sourceUserId: userId }
+            : t,
         ),
       );
     } finally {
       setBusy(false);
     }
+  };
+
+  // Retry: re-runs the prompt that produced a failed assistant turn. Drops
+  // both the user+assistant pair from the thread, then re-submits — that way
+  // baseJsx falls back to whatever was current before this failed turn (or
+  // null on a first-message failure).
+  const retryFromFailure = (failedAssistant: Turn) => {
+    if (busy || failedAssistant.role !== 'assistant' || failedAssistant.status !== 'error') return;
+    const sourceUser = turns.find(
+      (t): t is Extract<Turn, { role: 'user' }> =>
+        t.role === 'user' && t.id === failedAssistant.sourceUserId,
+    );
+    if (!sourceUser) return;
+    setTurns((prev) =>
+      prev.filter((t) => t.id !== sourceUser.id && t.id !== failedAssistant.id),
+    );
+    void submit(sourceUser.text, sourceUser.mode);
   };
 
   const newConversation = () => {
@@ -336,7 +361,13 @@ export default function ForgeUiPage() {
             ) : (
               <div className="px-4 sm:px-5 py-5 space-y-5 max-w-[640px] mx-auto">
                 {turns.map((t) => (
-                  <TurnView key={t.id} turn={t} onShow={() => { setView('preview'); setShowPreviewMobile(true); }} />
+                  <TurnView
+                    key={t.id}
+                    turn={t}
+                    busy={busy}
+                    onShow={() => { setView('preview'); setShowPreviewMobile(true); }}
+                    onRetry={() => retryFromFailure(t)}
+                  />
                 ))}
               </div>
             )}
@@ -540,7 +571,17 @@ function ModeChip({
   );
 }
 
-function TurnView({ turn, onShow }: { turn: Turn; onShow: () => void }) {
+function TurnView({
+  turn,
+  busy,
+  onShow,
+  onRetry,
+}: {
+  turn: Turn;
+  busy: boolean;
+  onShow: () => void;
+  onRetry: () => void;
+}) {
   if (turn.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -587,9 +628,19 @@ function TurnView({ turn, onShow }: { turn: Turn; onShow: () => void }) {
           </button>
         )}
         {turn.status === 'error' && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-sm text-red-300">
-            <div className="font-medium mb-0.5">Generation failed</div>
-            <div className="text-[12px] text-red-300/80">{turn.error}</div>
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-sm text-red-300 space-y-2.5">
+            <div>
+              <div className="font-medium mb-0.5">Generation failed</div>
+              <div className="text-[12px] text-red-300/80">{turn.error}</div>
+            </div>
+            <button
+              onClick={onRetry}
+              disabled={busy}
+              className="h-7 px-2.5 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-[12px] font-medium text-red-200 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              <span>↻</span>
+              <span>Try again</span>
+            </button>
           </div>
         )}
       </div>
