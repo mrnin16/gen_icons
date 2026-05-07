@@ -114,22 +114,25 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Lightweight syntactic check. Catches the common failure modes (truncated
-// output, missing braces) without dragging a parser into the request path.
-// Returns null when looks-balanced, or a short reason when not.
+// Lightweight syntactic check for the truncation case (the model hits its
+// max-tokens cap and stops mid-component). We only check brace balance — in
+// JSX, `{ }` always pair up (they delimit JS expressions), but `( )` and
+// `[ ]` can appear unbalanced in literal JSX text (e.g. `<p>Free (14 days)</p>`)
+// so they are NOT reliable balance markers.
+//
+// Returns null when looks-OK, or a short reason when not.
 function validateJsx(jsx: string): string | null {
   if (!jsx || !/function\s+App\s*\(/.test(jsx)) {
     return 'no `function App` found';
   }
-  // Must end with a closing brace (allowing trailing whitespace/newlines).
   if (!/}\s*$/.test(jsx)) {
     return 'output did not end with a closing `}` — likely truncated';
   }
-  // Walk the string ignoring contents inside strings, template literals,
-  // line comments, and block comments. Track balance of (), {}, [].
+
   let i = 0;
   const n = jsx.length;
-  let pa = 0, br = 0, sq = 0;
+  let braces = 0;
+
   while (i < n) {
     const c = jsx[i];
     const c2 = jsx[i + 1];
@@ -165,16 +168,13 @@ function validateJsx(jsx: string): string | null {
       i++;
       continue;
     }
-    // template literal — skip whole template, including ${...} which is
-    // tracked separately for balance? For safety we recurse: nested ${}
-    // contributes to brace count. Simpler approach: skip until matching
-    // backtick, treating ${ ... } depth as part of {} balance.
+    // template literal — `${...}` braces inside a template need to be tracked
+    // as their own scope (they don't contribute to outer brace count).
     if (c === '`') {
       i++;
       while (i < n && jsx[i] !== '`') {
         if (jsx[i] === '\\') { i += 2; continue; }
         if (jsx[i] === '$' && jsx[i + 1] === '{') {
-          // track expression braces inside template
           let depth = 1;
           i += 2;
           while (i < n && depth > 0) {
@@ -190,19 +190,16 @@ function validateJsx(jsx: string): string | null {
       i++;
       continue;
     }
-    if (c === '(') pa++;
-    else if (c === ')') pa--;
-    else if (c === '{') br++;
-    else if (c === '}') br--;
-    else if (c === '[') sq++;
-    else if (c === ']') sq--;
-    if (pa < 0 || br < 0 || sq < 0) {
-      return `unbalanced ${c}`;
+    if (c === '{') braces++;
+    else if (c === '}') {
+      braces--;
+      if (braces < 0) return 'unexpected `}` — output likely corrupted';
     }
     i++;
   }
-  if (pa !== 0) return `unbalanced parentheses (${pa} open)`;
-  if (br !== 0) return `unbalanced braces (${br} open)`;
-  if (sq !== 0) return `unbalanced brackets (${sq} open)`;
+
+  if (braces !== 0) {
+    return `unbalanced braces (${braces} open) — output likely truncated`;
+  }
   return null;
 }
