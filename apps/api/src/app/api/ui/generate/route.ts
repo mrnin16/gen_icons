@@ -114,92 +114,19 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Lightweight syntactic check for the truncation case (the model hits its
-// max-tokens cap and stops mid-component). We only check brace balance — in
-// JSX, `{ }` always pair up (they delimit JS expressions), but `( )` and
-// `[ ]` can appear unbalanced in literal JSX text (e.g. `<p>Free (14 days)</p>`)
-// so they are NOT reliable balance markers.
+// Cheap, reliable malformed-output check. Hand-rolled balance walkers always
+// false-positive on JSX (regex literals, JSX text, character-class braces,
+// etc.) so we only enforce the markers that are dead simple to verify and
+// that catch the failure case we actually care about — token-truncated output.
 //
-// Returns null when looks-OK, or a short reason when not.
+// If JSX is syntactically off in subtler ways the iframe's in-page error UI
+// surfaces it and the user can hit Try again.
 function validateJsx(jsx: string): string | null {
   if (!jsx || !/function\s+App\s*\(/.test(jsx)) {
     return 'no `function App` found';
   }
   if (!/}\s*$/.test(jsx)) {
     return 'output did not end with a closing `}` — likely truncated';
-  }
-
-  let i = 0;
-  const n = jsx.length;
-  let braces = 0;
-
-  while (i < n) {
-    const c = jsx[i];
-    const c2 = jsx[i + 1];
-    // line comment
-    if (c === '/' && c2 === '/') {
-      while (i < n && jsx[i] !== '\n') i++;
-      continue;
-    }
-    // block comment
-    if (c === '/' && c2 === '*') {
-      i += 2;
-      while (i < n - 1 && !(jsx[i] === '*' && jsx[i + 1] === '/')) i++;
-      i += 2;
-      continue;
-    }
-    // single-quoted string
-    if (c === "'") {
-      i++;
-      while (i < n && jsx[i] !== "'") {
-        if (jsx[i] === '\\') i += 2;
-        else i++;
-      }
-      i++;
-      continue;
-    }
-    // double-quoted string
-    if (c === '"') {
-      i++;
-      while (i < n && jsx[i] !== '"') {
-        if (jsx[i] === '\\') i += 2;
-        else i++;
-      }
-      i++;
-      continue;
-    }
-    // template literal — `${...}` braces inside a template need to be tracked
-    // as their own scope (they don't contribute to outer brace count).
-    if (c === '`') {
-      i++;
-      while (i < n && jsx[i] !== '`') {
-        if (jsx[i] === '\\') { i += 2; continue; }
-        if (jsx[i] === '$' && jsx[i + 1] === '{') {
-          let depth = 1;
-          i += 2;
-          while (i < n && depth > 0) {
-            if (jsx[i] === '{') depth++;
-            else if (jsx[i] === '}') depth--;
-            else if (jsx[i] === '\\') i++;
-            i++;
-          }
-          continue;
-        }
-        i++;
-      }
-      i++;
-      continue;
-    }
-    if (c === '{') braces++;
-    else if (c === '}') {
-      braces--;
-      if (braces < 0) return 'unexpected `}` — output likely corrupted';
-    }
-    i++;
-  }
-
-  if (braces !== 0) {
-    return `unbalanced braces (${braces} open) — output likely truncated`;
   }
   return null;
 }
