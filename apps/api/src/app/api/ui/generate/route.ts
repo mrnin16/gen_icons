@@ -5,6 +5,8 @@ import { generateTextWithFallback, modelFor } from '@/lib/ai-providers';
 import {
   UI_SYSTEM_PROMPT,
   UI_SLIDES_SYSTEM_PROMPT,
+  UI_REFINE_SYSTEM_PROMPT,
+  UI_SLIDES_REFINE_SYSTEM_PROMPT,
   deriveTitle,
   stripCodeFence,
   wrapAsHtmlDoc,
@@ -37,7 +39,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { prompt?: string; mode?: 'page' | 'slides' };
+  let body: { prompt?: string; mode?: 'page' | 'slides'; baseJsx?: string };
   try {
     body = await req.json();
   } catch {
@@ -46,6 +48,7 @@ export async function POST(req: NextRequest) {
 
   const prompt = (body.prompt || '').trim();
   const mode = body.mode === 'slides' ? 'slides' : 'page';
+  const baseJsx = (body.baseJsx || '').trim();
 
   if (!prompt) {
     return NextResponse.json({ error: 'Prompt required' }, { status: 400 });
@@ -54,12 +57,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Prompt too long (max 600 chars)' }, { status: 400 });
   }
 
-  const system = mode === 'slides' ? UI_SLIDES_SYSTEM_PROMPT : UI_SYSTEM_PROMPT;
+  const isRefine = !!baseJsx && /function\s+App\s*\(/.test(baseJsx);
+  const system = isRefine
+    ? (mode === 'slides' ? UI_SLIDES_REFINE_SYSTEM_PROMPT : UI_REFINE_SYSTEM_PROMPT)
+    : (mode === 'slides' ? UI_SLIDES_SYSTEM_PROMPT : UI_SYSTEM_PROMPT);
+
+  const userMessage = isRefine
+    ? `CURRENT App component:\n\n\`\`\`jsx\n${baseJsx}\n\`\`\`\n\nChange request:\n${prompt}`
+    : prompt;
 
   try {
     const result = await generateTextWithFallback({
       system,
-      user: prompt,
+      user: userMessage,
       maxTokens: 6000,
     });
     const jsx = stripCodeFence(result.text);

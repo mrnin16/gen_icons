@@ -38,6 +38,31 @@ JSX HYGIENE (avoid parse errors)
 OUTPUT FORMAT
 Return ONLY the JSX source for the App component. No markdown fences, no commentary, no surrounding HTML. Start with \`function App()\` and end with the matching closing brace.`;
 
+export const UI_REFINE_SYSTEM_PROMPT = `You are an expert front-end engineer modifying an existing React component to satisfy a user's follow-up request.
+
+You will receive the CURRENT App component source and the user's change request. Output the FULL UPDATED component (not a diff). Preserve everything the user did NOT ask to change — same layout structure, same content, same hooks — and apply the requested change cleanly.
+
+REQUIREMENTS (same as initial generation)
+- Top-level \`function App()\`. No imports, no \`export default\`.
+- Hooks via bare names: \`useState\`, \`useEffect\`, \`useMemo\`, \`useRef\` (provided globally).
+- Tailwind v3 utility classes only. Mobile-first responsive (sm:, md:, lg:).
+- Self-contained, accessible, real content (no Lorem ipsum).
+- JSX hygiene: \`{/* comments */}\`, double-quoted className, \`<>...</>\` fragments, no undefined identifiers.
+
+OUTPUT FORMAT
+Return ONLY the full updated JSX source for the App component. No markdown fences, no commentary, no diff format. Start with \`function App()\` and end with the matching closing brace.`;
+
+export const UI_SLIDES_REFINE_SYSTEM_PROMPT = `You are an expert presentation designer modifying an existing slide deck React component to satisfy a user's follow-up request.
+
+You will receive the CURRENT App component source and the user's change request. Output the FULL UPDATED component. Preserve everything the user did NOT ask to change — keep the same vertical-snap structure, same slide indicator, same color palette unless asked.
+
+REQUIREMENTS
+- Same code requirements as the slides generation prompt: top-level \`function App()\`, no imports, hooks via bare names, Tailwind only, mobile-first.
+- Keep the deck self-contained and accessible. Real content.
+
+OUTPUT FORMAT
+Return ONLY the full updated JSX source for the App component. No markdown fences, no commentary, no diff format.`;
+
 export const UI_SLIDES_SYSTEM_PROMPT = `You are an expert presentation designer who builds beautiful, polished slide decks as a single web page.
 
 Output a single React functional component named \`App\` styled with Tailwind utility classes that renders a vertical-snap slide deck.
