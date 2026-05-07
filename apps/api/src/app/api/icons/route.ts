@@ -34,14 +34,16 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  // Visibility: platform defaults (isAiGenerated=false) are public; AI icons are
-  // private to their owner. Admins see everything. `?mine=1` narrows to icons
-  // the current user owns.
+  // Visibility:
+  //   • Platform defaults (isAiGenerated=false) are public.
+  //   • AI icons published by an admin (isPublic=true) are public to everyone.
+  //   • Otherwise an AI icon is visible only to its owner. Admins see all.
+  //   • `?mine=1` narrows to icons the current user owns.
   const visibility: Prisma.IconWhereInput | null = mine
     ? user ? { userId: user.id } : { id: '__no_match__' }
     : user?.role === 'ADMIN' ? null
-    : user ? { OR: [{ isAiGenerated: false }, { userId: user.id }] }
-    : { isAiGenerated: false };
+    : user ? { OR: [{ isPublic: true }, { userId: user.id }] }
+    : { isPublic: true };
 
   const where: Prisma.IconWhereInput = visibility
     ? { AND: [visibility, filters] }
@@ -69,6 +71,7 @@ export async function GET(req: NextRequest) {
         style: true,
         tags: true,
         isAiGenerated: true,
+        isPublic: true,
         iconType: true,
         animationData: true,
         downloads: true,

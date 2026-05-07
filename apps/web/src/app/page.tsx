@@ -211,7 +211,15 @@ function HomeInner() {
         </main>
       </div>
 
-      <IconDetailModal icon={selectedIcon} onClose={() => setSelectedIcon(null)} />
+      <IconDetailModal
+        icon={selectedIcon}
+        onClose={() => setSelectedIcon(null)}
+        onUpdated={(updated) => {
+          setSelectedIcon(updated);
+          void mutate();
+          void mutateCats();
+        }}
+      />
       <AiGenerator
         open={generatorOpen}
         onClose={() => setGeneratorOpen(false)}

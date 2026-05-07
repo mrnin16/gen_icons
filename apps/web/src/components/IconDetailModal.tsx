@@ -23,7 +23,8 @@ import {
   STROKE_SCALE_MIN,
   customizeSvg,
 } from '@/lib/customize-svg';
-import { assetUrl } from '@/lib/api-client';
+import { apiFetch, assetUrl } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 
 const AnimationPlayer = dynamic(
   () => import('@/components/AnimationPlayer').then(m => m.AnimationPlayer),
@@ -37,6 +38,7 @@ type Tab = 'download' | 'code' | 'animate';
 type Props = {
   icon: IconDTO | null;
   onClose: () => void;
+  onUpdated?: (icon: IconDTO) => void;
 };
 
 function nearestSnap(v: number): number {
@@ -45,19 +47,53 @@ function nearestSnap(v: number): number {
   );
 }
 
-export function IconDetailModal({ icon, onClose }: Props) {
+export function IconDetailModal({ icon, onClose, onUpdated }: Props) {
+  const { user } = useAuth();
   const [size, setSize] = useState(256);
   const [tab, setTab] = useState<Tab>('download');
   const [framework, setFramework] = useState<FrameworkId>('react');
   const [copied, setCopied] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(null);
   const [strokeScale, setStrokeScale] = useState<number>(DEFAULT_STROKE_SCALE);
+  const [iconState, setIconState] = useState<IconDTO | null>(icon);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIconState(icon);
+    setPublishError(null);
+  }, [icon?.id]);
+
+  const liveIcon = iconState ?? icon;
+
+  const togglePublic = async () => {
+    if (!liveIcon || publishing || user?.role !== 'ADMIN' || !liveIcon.isAiGenerated) return;
+    setPublishing(true);
+    setPublishError(null);
+    const next = !liveIcon.isPublic;
+    try {
+      const res = await apiFetch(`/api/icons/${encodeURIComponent(liveIcon.slug)}/visibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: next }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || 'Failed to update visibility');
+      const updated: IconDTO = { ...liveIcon, isPublic: next };
+      setIconState(updated);
+      onUpdated?.(updated);
+    } catch (e) {
+      setPublishError(e instanceof Error ? e.message : 'Failed to update visibility');
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   // Lottie playback (Animate tab) requires real animationData. Pre-built
   // animated icons ship Lottie JSON; AI-generated animated icons rely on
   // CSS @keyframes baked into svgContent and self-animate in the inline
   // preview, so we skip the Lottie tab for those.
-  const hasLottie = !!icon?.animationData;
+  const hasLottie = !!liveIcon?.animationData;
 
   useEffect(() => {
     if (icon) {
@@ -210,7 +246,7 @@ export function IconDetailModal({ icon, onClose }: Props) {
                 />
               </div>
 
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--text-secondary)]">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-[var(--text-secondary)] items-center">
                 <span>
                   Category:{' '}
                   <span className="text-[var(--text-primary)]">
@@ -220,6 +256,23 @@ export function IconDetailModal({ icon, onClose }: Props) {
                 <span>
                   Downloads: <span className="text-[var(--text-primary)]">{icon.downloads}</span>
                 </span>
+                {liveIcon?.isAiGenerated && (
+                  <span
+                    className={clsx(
+                      'px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-semibold',
+                      liveIcon.isPublic
+                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+                    )}
+                    title={
+                      liveIcon.isPublic
+                        ? 'Visible to everyone'
+                        : 'Visible only to you (and admins)'
+                    }
+                  >
+                    {liveIcon.isPublic ? '🌐 Public' : '🔒 Private'}
+                  </span>
+                )}
                 {icon.tags?.length ? (
                   <span className="flex flex-wrap gap-1">
                     {icon.tags.slice(0, 6).map((t) => (
@@ -230,6 +283,40 @@ export function IconDetailModal({ icon, onClose }: Props) {
                   </span>
                 ) : null}
               </div>
+
+              {user?.role === 'ADMIN' && liveIcon?.isAiGenerated && (
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-[var(--text-primary)]">
+                      {liveIcon.isPublic ? 'Published to catalog' : 'Private — only you can see this'}
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                      {liveIcon.isPublic
+                        ? 'Anyone visiting the site sees this icon in the catalog and search results.'
+                        : 'Publish to make this AI-generated icon visible to everyone (signed-in or not).'}
+                    </div>
+                    {publishError && (
+                      <div className="text-[11px] text-red-400 mt-1">{publishError}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={togglePublic}
+                    disabled={publishing}
+                    className={clsx(
+                      'shrink-0 h-9 px-3 rounded-md text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5',
+                      liveIcon.isPublic
+                        ? 'border border-amber-500/40 text-amber-200 hover:bg-amber-500/10'
+                        : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-900/30',
+                    )}
+                  >
+                    {publishing
+                      ? '…'
+                      : liveIcon.isPublic
+                        ? 'Make private'
+                        : '🌐 Publish'}
+                  </button>
+                </div>
+              )}
 
               <section>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
