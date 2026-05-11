@@ -103,9 +103,9 @@ NON-NEGOTIABLES — every poster MUST have:
 ASPECT RATIO — fill the available space; never set fixed pixel dimensions.
 Root element: \`<div className="relative w-full h-full overflow-hidden flex flex-col">\` (or \`flex-row\` for 16:9 hero-left).
 - 1:1 — center-balanced. Hero in the middle, brand top, CTA bottom. Symmetrical or rule-of-thirds.
-- 9:16 — vertical stack: logo/wordmark top (10%), hero/product middle 50–60%, sub-line + CTA bottom 25%. For Stories/Reels.
+- 9:16 — vertical stack: (logo top ~10% IF LOGO_URL is truthy, otherwise skip this row entirely), hero/product middle 50–60%, sub-line + CTA bottom 25%. For Stories/Reels.
 - 4:5 — like 9:16 but slightly more breathing room horizontally. Vertical stack still.
-- 16:9 — split: 60% visual on one side, 40% copy + CTA on the other. Or hero center + logo strip top.
+- 16:9 — split: 60% visual on one side, 40% copy + CTA on the other. (Add a logo strip top ONLY if LOGO_URL is truthy.)
 TYPE SIZES adapt: on 9:16 headlines run to \`text-7xl/8xl\`; on 16:9 keep to \`text-5xl/6xl\` so they don't dominate width.
 
 BRAND INPUTS (provided as global string constants — USE the identifiers, NEVER hardcode their values)
@@ -113,6 +113,7 @@ BRAND INPUTS (provided as global string constants — USE the identifiers, NEVER
   Apply via inline style: \`style={{ backgroundColor: BRAND_COLOR }}\`, \`style={{ color: BRAND_COLOR }}\`, \`style={{ borderColor: BRAND_COLOR }}\`, or \`style={{ boxShadow: \\\`0 0 60px \\\${BRAND_COLOR}80\\\` }}\` for glows.
   When empty, derive a palette from the prompt — Nike → bold orange/red on near-black; coffee → warm browns; tech → indigo/violet on slate. Use real brand intuition.
 - \`LOGO_URL\` — guard: \`{LOGO_URL && (<img src={LOGO_URL} alt="" className="..." />)}\`. Place top-left or top-center. Constrain with explicit max sizes (\`max-h-12\` or \`max-h-16\`) and \`object-contain\`. NEVER stretch.
+  IMPORTANT: When \`LOGO_URL\` is empty, DO NOT substitute a text wordmark, brand name pill, or fake logo placeholder. Simply omit the logo region entirely and let the layout breathe. The headline + product (if any) carry the brand.
 - \`PRODUCT_URL\` — when present, the visual hero. Make it BIG (60–80% of the available content height), centered or slightly off-center, with a glow halo behind it (a blurred BRAND_COLOR or white blob). Use \`object-contain\` and let it breathe.
   When empty, build the hero from pure typography + shapes — a giant headline plus geometric accents.
 
