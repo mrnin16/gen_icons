@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { AspectRatio } from '@/lib/forge-ui/exports';
+import { removeBackground } from '@/lib/forge-ui/bg-removal';
 
 export type Brand = {
   color: string;
@@ -79,6 +80,7 @@ export function BrandInputsPanel({
           onChange={(productDataUrl) => onChange({ ...value, productDataUrl })}
           maxPx={PRODUCT_MAX_PX}
           hint="Optional · the visual hero"
+          autoRemoveBg
         />
       </div>
     </div>
@@ -161,15 +163,43 @@ function ImageRow({
   onChange,
   maxPx,
   hint,
+  autoRemoveBg,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   maxPx: number;
   hint: string;
+  autoRemoveBg?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Both versions are kept locally so the user can toggle between them
+  // without re-running the (relatively expensive) background-removal pass.
+  const [originalUrl, setOriginalUrl] = useState('');
+  const [cutoutUrl, setCutoutUrl] = useState('');
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  // Sync local state when `value` is set from outside (e.g. loading from
+  // history or clearing the brand). If the external value matches neither
+  // stored version, treat it as the original and clear the cutout state.
+  useEffect(() => {
+    if (!value) {
+      if (originalUrl || cutoutUrl) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring external value reset into local-only state used for the toggle.
+        setOriginalUrl('');
+        setCutoutUrl('');
+        setShowOriginal(false);
+      }
+      return;
+    }
+    if (value !== originalUrl && value !== cutoutUrl) {
+      setOriginalUrl(value);
+      setCutoutUrl('');
+      setShowOriginal(true);
+    }
+  }, [value, originalUrl, cutoutUrl]);
 
   const onFile = async (file: File | null | undefined) => {
     if (!file) return;
@@ -180,10 +210,42 @@ function ImageRow({
     }
     try {
       const dataUrl = await resizeImageFile(file, maxPx);
+      setOriginalUrl(dataUrl);
+      setCutoutUrl('');
+      setShowOriginal(false);
+
+      if (!autoRemoveBg) {
+        onChange(dataUrl);
+        return;
+      }
+
+      // Surface the original immediately so the user sees feedback while
+      // the bg-removal pass runs; swap to the cutout when it lands.
       onChange(dataUrl);
+      setProcessing(true);
+      try {
+        const result = await removeBackground(dataUrl);
+        if (result.removed) {
+          setCutoutUrl(result.dataUrl);
+          onChange(result.dataUrl);
+        }
+      } catch (e) {
+        // Removal failure is non-fatal — we just keep the original.
+        console.warn('Background removal failed:', e);
+      } finally {
+        setProcessing(false);
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not read image.');
     }
+  };
+
+  const hasCutout = !!cutoutUrl;
+  const toggleOriginal = () => {
+    if (!hasCutout) return;
+    const next = !showOriginal;
+    setShowOriginal(next);
+    onChange(next ? originalUrl : cutoutUrl);
   };
 
   return (
@@ -193,7 +255,12 @@ function ImageRow({
         {value && (
           <button
             type="button"
-            onClick={() => onChange('')}
+            onClick={() => {
+              onChange('');
+              setOriginalUrl('');
+              setCutoutUrl('');
+              setShowOriginal(false);
+            }}
             className="text-[10px] text-stone-500 hover:text-red-300 transition"
           >
             Remove
@@ -204,6 +271,7 @@ function ImageRow({
         className={`relative h-20 rounded-lg border border-dashed border-white/15 bg-[#2a2622] overflow-hidden transition hover:border-white/30 ${
           value ? 'border-solid border-white/10' : ''
         }`}
+        style={value ? checkerboardStyle : undefined}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -241,7 +309,31 @@ function ImageRow({
             Change
           </button>
         )}
+        {processing && (
+          <div className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-sm gap-1.5">
+            <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            <span className="text-[9px] text-stone-300">Removing background…</span>
+          </div>
+        )}
       </div>
+      {hasCutout && !processing && (
+        <div className="flex items-center justify-between gap-1 px-0.5">
+          <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
+            <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            BG removed
+          </span>
+          <button
+            type="button"
+            onClick={toggleOriginal}
+            className="text-[10px] text-stone-500 hover:text-stone-300 transition"
+            title={showOriginal ? 'Use cutout version' : 'View the original photo'}
+          >
+            {showOriginal ? 'Use cutout' : 'Show original'}
+          </button>
+        </div>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -253,6 +345,17 @@ function ImageRow({
     </div>
   );
 }
+
+// 6×6 checkerboard so transparent cutouts read clearly in the dark UI.
+const checkerboardStyle: React.CSSProperties = {
+  backgroundImage:
+    'linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%),' +
+    'linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%),' +
+    'linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%),' +
+    'linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%)',
+  backgroundSize: '12px 12px',
+  backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
+};
 
 // ─── Image resize utility ───────────────────────────────────────────────────
 
