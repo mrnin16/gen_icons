@@ -180,6 +180,9 @@ function ImageRow({
   const [cutoutUrl, setCutoutUrl] = useState('');
   const [showOriginal, setShowOriginal] = useState(false);
   const [processing, setProcessing] = useState(false);
+  // Set when a manual removal pass came back with no detected background, so
+  // we can hint to the user instead of silently doing nothing.
+  const [noBgDetected, setNoBgDetected] = useState(false);
 
   // Sync local state when `value` is set from outside (e.g. loading from
   // history or clearing the brand). If the external value matches neither
@@ -201,6 +204,26 @@ function ImageRow({
     }
   }, [value, originalUrl, cutoutUrl]);
 
+  const runRemoval = async (src: string) => {
+    setNoBgDetected(false);
+    setProcessing(true);
+    try {
+      const result = await removeBackground(src);
+      if (result.removed) {
+        setCutoutUrl(result.dataUrl);
+        setShowOriginal(false);
+        onChange(result.dataUrl);
+      } else {
+        setNoBgDetected(true);
+      }
+    } catch (e) {
+      console.warn('Background removal failed:', e);
+      setNoBgDetected(true);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const onFile = async (file: File | null | undefined) => {
     if (!file) return;
     setErr(null);
@@ -213,31 +236,21 @@ function ImageRow({
       setOriginalUrl(dataUrl);
       setCutoutUrl('');
       setShowOriginal(false);
-
-      if (!autoRemoveBg) {
-        onChange(dataUrl);
-        return;
-      }
-
+      setNoBgDetected(false);
       // Surface the original immediately so the user sees feedback while
-      // the bg-removal pass runs; swap to the cutout when it lands.
+      // the bg-removal pass (if enabled) runs; swap to the cutout when it lands.
       onChange(dataUrl);
-      setProcessing(true);
-      try {
-        const result = await removeBackground(dataUrl);
-        if (result.removed) {
-          setCutoutUrl(result.dataUrl);
-          onChange(result.dataUrl);
-        }
-      } catch (e) {
-        // Removal failure is non-fatal — we just keep the original.
-        console.warn('Background removal failed:', e);
-      } finally {
-        setProcessing(false);
-      }
+      if (autoRemoveBg) await runRemoval(dataUrl);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not read image.');
     }
+  };
+
+  const manualRemove = () => {
+    const src = originalUrl || value;
+    if (!src) return;
+    if (!originalUrl) setOriginalUrl(src);
+    void runRemoval(src);
   };
 
   const hasCutout = !!cutoutUrl;
@@ -260,6 +273,7 @@ function ImageRow({
               setOriginalUrl('');
               setCutoutUrl('');
               setShowOriginal(false);
+              setNoBgDetected(false);
             }}
             className="text-[10px] text-stone-500 hover:text-red-300 transition"
           >
@@ -316,22 +330,40 @@ function ImageRow({
           </div>
         )}
       </div>
-      {hasCutout && !processing && (
-        <div className="flex items-center justify-between gap-1 px-0.5">
-          <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
-            <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            BG removed
-          </span>
-          <button
-            type="button"
-            onClick={toggleOriginal}
-            className="text-[10px] text-stone-500 hover:text-stone-300 transition"
-            title={showOriginal ? 'Use cutout version' : 'View the original photo'}
-          >
-            {showOriginal ? 'Use cutout' : 'Show original'}
-          </button>
+      {autoRemoveBg && value && !processing && (
+        <div className="flex items-center justify-between gap-1 px-0.5 min-h-[14px]">
+          {hasCutout ? (
+            <>
+              <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
+                <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                BG removed
+              </span>
+              <button
+                type="button"
+                onClick={toggleOriginal}
+                className="text-[10px] text-stone-500 hover:text-stone-300 transition"
+                title={showOriginal ? 'Use the cutout version' : 'View the original photo'}
+              >
+                {showOriginal ? 'Use cutout' : 'Show original'}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] text-stone-600 truncate">
+                {noBgDetected ? 'No background detected' : 'Background still visible?'}
+              </span>
+              <button
+                type="button"
+                onClick={manualRemove}
+                className="text-[10px] text-[#e89472] hover:text-[#f4a784] transition shrink-0"
+                title="Run background removal on this image"
+              >
+                Remove BG
+              </button>
+            </>
+          )}
         </div>
       )}
       <input
