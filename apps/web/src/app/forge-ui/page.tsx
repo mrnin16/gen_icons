@@ -842,11 +842,9 @@ function ForgeUiPageInner() {
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
 
-// Renders the poster iframe inside a constrained, centered frame at the
-// chosen aspect ratio. The iframe is rendered at the target export pixel
-// dimensions (e.g. 1080×1080 for 1:1) and then scaled to fit the visible
-// area with CSS transform — that way the preview is pixel-accurate and
-// matches what gets exported.
+// Renders the poster iframe inside a centered frame at the chosen aspect
+// ratio. The inner box is sized to fit the available space (with a small
+// gutter) while preserving proportions. Switching ratios animates smoothly.
 function PosterPreviewFrame({
   html,
   title,
@@ -858,49 +856,57 @@ function PosterPreviewFrame({
   jsxKey: number;
   ratio: AspectRatio;
 }) {
-  const { width, height } = aspectDimensions(ratio);
+  const [rw, rh] = ratio.split(':').map(Number);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
+    const compute = () => {
       const rect = el.getBoundingClientRect();
-      // Leave a tasteful 24px gutter so the frame doesn't kiss the panel edges.
-      const availW = rect.width - 48;
-      const availH = rect.height - 48;
+      // Gutter scales with viewport — tighter on mobile, looser on desktop.
+      const gutter = Math.min(48, Math.max(16, rect.width * 0.04));
+      const availW = rect.width - gutter * 2;
+      const availH = rect.height - gutter * 2;
       if (availW <= 0 || availH <= 0) return;
-      const next = Math.min(availW / width, availH / height);
-      setScale(next > 0 ? next : 1);
-    });
+      // Pick the bound that's smaller — fit-to-container while preserving AR.
+      const w = Math.min(availW, availH * (rw / rh));
+      const h = w * (rh / rw);
+      setBox({ w, h });
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [width, height]);
+  }, [rw, rh]);
 
   return (
     <div
       ref={wrapRef}
       className="absolute inset-0 grid place-items-center overflow-hidden"
-      style={{ background: 'radial-gradient(circle at 50% 30%, #1a1715 0%, #0e0c0b 70%)' }}
+      style={{ background: 'radial-gradient(circle at 50% 30%, #2a2622 0%, #0e0c0b 75%)' }}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl overflow-hidden transition-all duration-400 ease-out"
+        key={`${jsxKey}:${ratio}`}
+        className="relative bg-white rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.6)] ring-1 ring-white/5 overflow-hidden animate-poster-pop transition-[width,height] duration-400 ease-out"
         style={{
-          width: width,
-          height: height,
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center',
+          width: box ? box.w : 0,
+          height: box ? box.h : 0,
+          opacity: box ? 1 : 0,
         }}
       >
         <iframe
-          key={`${jsxKey}:${ratio}`}
           title={title}
           srcDoc={html}
           sandbox="allow-scripts"
-          className="block w-full h-full"
+          className="absolute inset-0 w-full h-full"
           style={{ border: 0 }}
         />
+        <style>{`
+          @keyframes poster-pop { 0% { opacity: 0; transform: scale(0.94); } 100% { opacity: 1; transform: scale(1); } }
+          .animate-poster-pop { animation: poster-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        `}</style>
       </div>
     </div>
   );
