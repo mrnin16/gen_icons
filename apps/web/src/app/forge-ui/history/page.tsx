@@ -8,7 +8,8 @@ import { apiFetch } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { AuthModal } from '@/components/AuthModal';
 
-type Mode = 'page' | 'slides';
+type Mode = 'page' | 'slides' | 'poster';
+type AspectRatio = '1:1' | '9:16' | '4:5' | '16:9';
 
 type HistoryItem = {
   id: string;
@@ -18,6 +19,8 @@ type HistoryItem = {
   isRefine: boolean;
   provider: string;
   model: string;
+  aspectRatio?: AspectRatio | null;
+  brandColor?: string | null;
   createdAt: string;
 };
 
@@ -208,9 +211,23 @@ export default function ForgeUiHistoryPage() {
                           {it.title}
                         </div>
                       </div>
-                      <span className="shrink-0 text-[9px] uppercase tracking-wider text-stone-500 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-                        {it.mode}
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {it.brandColor && (
+                          <span
+                            className="w-3 h-3 rounded-full border border-white/20"
+                            style={{ background: it.brandColor }}
+                            title={`Brand ${it.brandColor}`}
+                          />
+                        )}
+                        <span className="text-[9px] uppercase tracking-wider text-stone-500 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                          {it.mode}
+                        </span>
+                        {it.mode === 'poster' && it.aspectRatio && (
+                          <span className="text-[9px] font-mono text-stone-500 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                            {it.aspectRatio}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-[12px] text-stone-500 line-clamp-3 leading-snug mb-3">
                       {it.prompt}

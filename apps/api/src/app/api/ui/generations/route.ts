@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
       isRefine: true,
       provider: true,
       model: true,
+      aspectRatio: true,
+      brandColor: true,
       createdAt: true,
     },
   });

@@ -8,10 +8,19 @@ import {
   UI_SLIDES_SYSTEM_PROMPT,
   UI_REFINE_SYSTEM_PROMPT,
   UI_SLIDES_REFINE_SYSTEM_PROMPT,
+  UI_POSTER_SYSTEM_PROMPT,
+  UI_POSTER_REFINE_SYSTEM_PROMPT,
   deriveTitle,
   stripCodeFence,
   wrapAsHtmlDoc,
 } from '@/lib/ui-prompts';
+
+const VALID_ASPECT_RATIOS = new Set(['1:1', '9:16', '4:5', '16:9']);
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+// Cap brand asset size at ~6MB per image (base64-inflated) so a single
+// generate request stays well under typical body limits. The web client
+// resizes uploads before hitting this, so this is a defense-in-depth check.
+const MAX_ASSET_LEN = 8_000_000;
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
@@ -40,7 +49,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { prompt?: string; mode?: 'page' | 'slides'; baseJsx?: string };
+  let body: {
+    prompt?: string;
+    mode?: 'page' | 'slides' | 'poster';
+    baseJsx?: string;
+    aspectRatio?: string;
+    brandColor?: string;
+    logoDataUrl?: string;
+    productDataUrl?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -48,7 +65,8 @@ export async function POST(req: NextRequest) {
   }
 
   const prompt = (body.prompt || '').trim();
-  const mode = body.mode === 'slides' ? 'slides' : 'page';
+  const mode: 'page' | 'slides' | 'poster' =
+    body.mode === 'slides' ? 'slides' : body.mode === 'poster' ? 'poster' : 'page';
   const baseJsx = (body.baseJsx || '').trim();
 
   if (!prompt) {
@@ -61,14 +79,58 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Prompt too long (max 8000 chars)' }, { status: 400 });
   }
 
+  // Poster-only inputs. Validate even when mode != poster — silently ignore
+  // unrelated inputs rather than erroring, so the client can be lazy.
+  const aspectRatio = mode === 'poster' ? (body.aspectRatio || '1:1') : null;
+  if (aspectRatio && !VALID_ASPECT_RATIOS.has(aspectRatio)) {
+    return NextResponse.json(
+      { error: `Invalid aspectRatio. Must be one of: ${[...VALID_ASPECT_RATIOS].join(', ')}` },
+      { status: 400 },
+    );
+  }
+  const brandColor = mode === 'poster' ? (body.brandColor || '').trim() || null : null;
+  if (brandColor && !HEX_COLOR_RE.test(brandColor)) {
+    return NextResponse.json(
+      { error: 'brandColor must be a 6-digit hex like #cc785c' },
+      { status: 400 },
+    );
+  }
+  const logoUrl = mode === 'poster' ? (body.logoDataUrl || '').trim() || null : null;
+  const productUrl = mode === 'poster' ? (body.productDataUrl || '').trim() || null : null;
+  if (logoUrl && logoUrl.length > MAX_ASSET_LEN) {
+    return NextResponse.json({ error: 'Logo image is too large (max ~6MB)' }, { status: 413 });
+  }
+  if (productUrl && productUrl.length > MAX_ASSET_LEN) {
+    return NextResponse.json({ error: 'Product image is too large (max ~6MB)' }, { status: 413 });
+  }
+
   const isRefine = !!baseJsx && /function\s+App\s*\(/.test(baseJsx);
   const system = isRefine
-    ? (mode === 'slides' ? UI_SLIDES_REFINE_SYSTEM_PROMPT : UI_REFINE_SYSTEM_PROMPT)
-    : (mode === 'slides' ? UI_SLIDES_SYSTEM_PROMPT : UI_SYSTEM_PROMPT);
+    ? mode === 'slides'
+      ? UI_SLIDES_REFINE_SYSTEM_PROMPT
+      : mode === 'poster'
+        ? UI_POSTER_REFINE_SYSTEM_PROMPT
+        : UI_REFINE_SYSTEM_PROMPT
+    : mode === 'slides'
+      ? UI_SLIDES_SYSTEM_PROMPT
+      : mode === 'poster'
+        ? UI_POSTER_SYSTEM_PROMPT
+        : UI_SYSTEM_PROMPT;
+
+  // Poster mode needs explicit context about the target ratio and which
+  // brand inputs are actually available — without ever sending the actual
+  // data URLs (token-heavy and not useful to the model).
+  const posterContext =
+    mode === 'poster'
+      ? `TARGET ASPECT RATIO: ${aspectRatio}\n` +
+        `BRAND_COLOR is ${brandColor ? `available (${brandColor})` : 'NOT provided (empty string) — pick a tasteful palette from the prompt'}.\n` +
+        `LOGO_URL is ${logoUrl ? 'available — place the brand logo tastefully' : 'NOT provided (empty string) — use a wordmark instead'}.\n` +
+        `PRODUCT_URL is ${productUrl ? 'available — make the product the visual hero' : 'NOT provided (empty string) — lean on typography and shapes'}.\n\n`
+      : '';
 
   const userMessage = isRefine
-    ? `CURRENT App component:\n\n\`\`\`jsx\n${baseJsx}\n\`\`\`\n\nChange request:\n${prompt}`
-    : prompt;
+    ? `${posterContext}CURRENT App component:\n\n\`\`\`jsx\n${baseJsx}\n\`\`\`\n\nChange request:\n${prompt}`
+    : `${posterContext}${prompt}`;
 
   // Refines have to regenerate the entire component with the change applied,
   // so they need a larger output budget than first-shot generations.
@@ -109,7 +171,8 @@ export async function POST(req: NextRequest) {
     }
 
     const title = deriveTitle(prompt);
-    const html = wrapAsHtmlDoc(jsx, title);
+    const brand = mode === 'poster' ? { color: brandColor, logoUrl, productUrl } : undefined;
+    const html = wrapAsHtmlDoc(jsx, title, brand);
     const providerUsed = result.providerUsed;
     const modelUsed = modelFor(providerUsed);
 
@@ -128,6 +191,10 @@ export async function POST(req: NextRequest) {
           isRefine,
           provider: providerUsed,
           model: modelUsed,
+          aspectRatio,
+          brandColor,
+          logoUrl,
+          productUrl,
         },
         select: { id: true },
       });
@@ -143,6 +210,10 @@ export async function POST(req: NextRequest) {
       html,
       provider: providerUsed,
       model: modelUsed,
+      aspectRatio,
+      brandColor,
+      logoUrl,
+      productUrl,
     });
   } catch (error) {
     console.error('UI generation error:', error);

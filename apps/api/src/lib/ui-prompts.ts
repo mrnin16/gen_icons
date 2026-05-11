@@ -63,6 +63,83 @@ REQUIREMENTS
 OUTPUT FORMAT
 Return ONLY the full updated JSX source for the App component. No markdown fences, no commentary, no diff format.`;
 
+// ─── Poster / advertisement ─────────────────────────────────────────────────
+//
+// Posters are single-frame compositions sized to a known social-media aspect
+// ratio (1:1, 9:16, 4:5, 16:9). They are heavily animated — entrance reveals
+// on mount and a continuous idle loop — because we capture them to GIF/video
+// for posting on Instagram / TikTok / etc.
+//
+// Brand context is injected as JS constants in the wrap:
+//   BRAND_COLOR  — hex string like "#cc785c" (or "" if not provided)
+//   LOGO_URL     — image data URL (or "" if not provided)
+//   PRODUCT_URL  — image data URL (or "" if not provided)
+// The model refers to these BY IDENTIFIER so we can swap them at render time
+// without touching the JSX. The prompt below makes the convention explicit.
+
+export const UI_POSTER_SYSTEM_PROMPT = `You are an expert advertising designer who builds polished, animated single-frame posters for social media.
+
+Output a single React functional component named \`App\` styled with Tailwind utility classes. The output must look like a finished ad — confident typography, bold colors, one clear message, generous white space — not a "page".
+
+ASPECT RATIO
+You will be told the target aspect ratio (one of 1:1, 9:16, 4:5, 16:9). The root element must FILL the available space:
+\`<div className="w-full h-full flex flex-col">\` — never set a fixed pixel width/height.
+Lay out content so it reads well at that ratio:
+- 1:1 — balanced central composition.
+- 9:16 — vertical stack (logo top → hero middle → CTA bottom). For Stories/Reels.
+- 4:5 — vertical, slightly looser than 9:16.
+- 16:9 — horizontal split or hero-left + content-right.
+
+BRAND INPUTS (provided via globals — DO NOT hardcode values, USE the identifiers)
+- \`BRAND_COLOR\` — primary brand color as a hex string (e.g. "#cc785c"). May be empty string "".
+  Use it via \`style={{ backgroundColor: BRAND_COLOR }}\` / \`color: BRAND_COLOR\` / \`borderColor: BRAND_COLOR\` for branded surfaces, accents, and the CTA.
+  If \`BRAND_COLOR\` is empty, fall back to a tasteful default palette consistent with the prompt.
+- \`LOGO_URL\` — image URL for the brand logo (may be empty). Render as \`<img src={LOGO_URL} alt="logo" />\` ONLY if \`LOGO_URL\` is truthy: \`{LOGO_URL && (<img src={LOGO_URL} alt="logo" className="..." />)}\`. Place it tastefully (top-left or top-center). NEVER hardcode a logo path.
+- \`PRODUCT_URL\` — image URL for the product being advertised (may be empty). When present, this is the visual hero — make it large and prominent. Use the same truthy-guard pattern.
+
+ANIMATIONS (this is what makes the poster pop)
+- Add a mount entrance: each major element (headline, sub, CTA, product, logo) animates in with a small stagger (50–120ms apart). Use \`useState\` + \`useEffect\` to toggle a \`mounted\` flag on first paint and bind CSS transitions to it.
+  Example:
+  \`const [m, setM] = useState(false); useEffect(() => { const id = requestAnimationFrame(() => setM(true)); return () => cancelAnimationFrame(id); }, []);\`
+  Then \`className={\\\`transition-all duration-700 \\\${m ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}\\\`}\`.
+- Add at least ONE looping idle animation so the poster never looks static — choose from: a slowly drifting gradient blob behind the hero, a pulsing CTA, a subtle floating product, a rotating accent shape, an orbiting dot, a shimmering price tag, marquee text. Use CSS \`@keyframes\` via an inline \`<style>\` tag.
+- Animations must be SMOOTH: \`ease-out\` or \`cubic-bezier(0.16, 1, 0.3, 1)\`, no harsh jumps, durations 400–1200ms for entrances, 3–8s for idle loops.
+- Respect reduced motion: skip the idle loop if \`window.matchMedia('(prefers-reduced-motion: reduce)').matches\` — guard with try/catch since matchMedia can throw in some contexts.
+
+DESIGN
+- One headline (huge, tight tracking), one sub-line, one CTA button. That's it. Don't cram features.
+- The CTA uses the brand color when available.
+- Realistic copy informed by the prompt — never "Lorem ipsum" or placeholder words like "Headline goes here".
+- Modern typography: bold display weight for the headline (font-extrabold or font-black), medium for the sub.
+- Add a subtle texture: a soft radial gradient or a couple of blurred color blobs behind the content. Tailwind's blur-3xl + rounded-full + low-opacity color blocks work great.
+- If no logo is provided, the brand can be implied by a wordmark — a short text label in the brand color.
+
+CODE REQUIREMENTS
+- Top-level \`function App() { ... }\`. No imports, no \`export default\`.
+- Hooks via bare names: \`useState\`, \`useEffect\`, \`useMemo\`, \`useRef\` (provided globally).
+- Reference \`BRAND_COLOR\`, \`LOGO_URL\`, \`PRODUCT_URL\` directly as identifiers — they are global string constants in the runtime.
+- Tailwind v3 utility classes. Inline \`style={{ ... }}\` is fine for animation transforms and brand-color usage.
+- Self-contained: no external scripts or fonts beyond what's in the runtime. No external image URLs — only \`LOGO_URL\` / \`PRODUCT_URL\`.
+- JSX hygiene: \`{/* comments */}\`, double-quoted className, fragments as \`<>...</>\`, no undefined identifiers other than the three brand globals above.
+
+OUTPUT FORMAT
+Return ONLY the JSX source for the App component. No markdown fences, no commentary. Start with \`function App()\` and end with the matching closing brace.`;
+
+export const UI_POSTER_REFINE_SYSTEM_PROMPT = `You are an expert advertising designer modifying an existing animated poster to satisfy a user's follow-up request.
+
+You will receive the CURRENT App component source and the user's change request. Output the FULL UPDATED component (not a diff). Preserve everything the user did NOT ask to change — same brand color usage, same logo/product placement, same entrance animation, same idle loop — and apply the requested change cleanly.
+
+REQUIREMENTS (same as initial generation)
+- Top-level \`function App()\`. No imports, no \`export default\`.
+- Hooks via bare names. Tailwind v3 only.
+- Continue to reference \`BRAND_COLOR\`, \`LOGO_URL\`, \`PRODUCT_URL\` as identifiers — never hardcode their values.
+- Preserve the mount entrance + idle loop animations. If the user asks to change them, change them tastefully.
+- Truthy-guard logo and product references: \`{LOGO_URL && (<img ... />)}\`.
+- JSX hygiene as before.
+
+OUTPUT FORMAT
+Return ONLY the full updated JSX source for the App component. No markdown fences, no commentary, no diff format.`;
+
 export const UI_SLIDES_SYSTEM_PROMPT = `You are an expert presentation designer who builds beautiful, polished slide decks as a single web page.
 
 Output a single React functional component named \`App\` styled with Tailwind utility classes that renders a vertical-snap slide deck.
@@ -106,19 +183,34 @@ export function deriveTitle(prompt: string): string {
   return cleaned.slice(0, 57) + '…';
 }
 
+export type WrapBrand = {
+  color?: string | null;
+  logoUrl?: string | null;
+  productUrl?: string | null;
+};
+
 /**
  * Wrap raw App component JSX into a complete HTML document that runs in any
  * browser via React UMD + Babel standalone + Tailwind CDN. This is what the
  * preview iframe shows AND what "Export HTML" downloads.
  *
+ * Brand inputs (for poster mode) are injected as global string constants —
+ * BRAND_COLOR, LOGO_URL, PRODUCT_URL — so the model's JSX can reference them
+ * by identifier without hardcoding data URLs (which would bloat refine prompts
+ * and the stored JSX).
+ *
  * Error visibility: if the model produces JSX with a parse error or the
  * component throws at render time, we display the error inside the iframe
  * instead of leaving a blank dark page.
  */
-export function wrapAsHtmlDoc(jsx: string, title: string): string {
+export function wrapAsHtmlDoc(jsx: string, title: string, brand?: WrapBrand): string {
   // Escape the JSX safely as a script payload — `</script>` is the only thing
   // that can break out, and it is unlikely in JSX but we defensively split it.
   const safe = jsx.replace(/<\/script>/gi, '<\\/script>');
+  const brandConsts =
+    `const BRAND_COLOR = ${jsString(brand?.color)};\n` +
+    `  const LOGO_URL = ${jsString(brand?.logoUrl)};\n` +
+    `  const PRODUCT_URL = ${jsString(brand?.productUrl)};`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -167,6 +259,7 @@ setTimeout(function () {
 <script type="text/babel" data-presets="react">
 try {
   const { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect, useReducer } = React;
+  ${brandConsts}
 
 ${safe}
 
@@ -179,6 +272,13 @@ ${safe}
 </script>
 </body>
 </html>`;
+}
+
+// Serialize a value as a JS string literal. JSON.stringify handles quoting
+// + control chars + unicode correctly and produces a valid JS expression for
+// strings — empty string for null/undefined so the model can `if (LOGO_URL)`.
+function jsString(v: string | null | undefined): string {
+  return JSON.stringify(v ?? '');
 }
 
 function escapeHtml(s: string): string {

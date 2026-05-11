@@ -51,17 +51,22 @@ model User {
 }
 
 model UiGeneration {
-  id        String   @id @default(cuid())
-  userId    String
-  title     String
-  prompt    String   @db.Text
-  jsx       String   @db.Text
-  html      String   @db.Text
-  mode      String
-  isRefine  Boolean  @default(false)
-  provider  String
-  model     String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  prompt       String   @db.Text
+  jsx          String   @db.Text
+  html         String   @db.Text
+  mode         String
+  isRefine     Boolean  @default(false)
+  provider     String
+  model        String
+  // Poster-specific (null for page/slides):
+  aspectRatio  String?
+  brandColor   String?
+  logoUrl      String?  @db.Text
+  productUrl   String?  @db.Text
+  createdAt    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

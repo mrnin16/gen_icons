@@ -7,10 +7,19 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch, apiUrl } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { AuthModal } from '@/components/AuthModal';
+import { AspectRatioChips, BrandInputsPanel, EMPTY_BRAND, type Brand } from '@/components/forge-ui/BrandInputs';
+import { ExportMenu, type ExportKind } from '@/components/forge-ui/ExportMenu';
+import {
+  aspectDimensions,
+  exportPosterGif,
+  exportPosterPng,
+  exportPosterVideo,
+  type AspectRatio,
+} from '@/lib/forge-ui/exports';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Mode = 'page' | 'slides';
+type Mode = 'page' | 'slides' | 'poster';
 type ViewTab = 'preview' | 'code';
 
 type GenerationData = {
@@ -20,6 +29,10 @@ type GenerationData = {
   html: string;
   provider: string;
   model: string;
+  aspectRatio?: AspectRatio | null;
+  brandColor?: string | null;
+  logoUrl?: string | null;
+  productUrl?: string | null;
 };
 
 type HistoryItem = {
@@ -30,14 +43,18 @@ type HistoryItem = {
   isRefine: boolean;
   provider: string;
   model: string;
+  aspectRatio?: AspectRatio | null;
+  brandColor?: string | null;
   createdAt: string;
 };
+
+type ExportState = { kind: ExportKind; stage: string; pct?: number } | null;
 
 type Turn =
   | { id: string; role: 'user'; text: string; mode: Mode; isRefine: boolean }
   | { id: string; role: 'assistant'; status: 'pending' | 'ok' | 'error'; data?: GenerationData; error?: string; sourceUserId?: string };
 
-const STARTERS: { label: string; mode: Mode; prompt: string }[] = [
+const STARTERS: { label: string; mode: Mode; prompt: string; ratio?: AspectRatio }[] = [
   {
     label: 'SaaS landing page',
     mode: 'page',
@@ -61,6 +78,20 @@ const STARTERS: { label: string; mode: Mode; prompt: string }[] = [
     mode: 'slides',
     prompt:
       'A 6-slide pitch deck for "Lumen", a productivity app that uses AI to schedule deep-work blocks. Title, problem, solution, how it works, traction, ask.',
+  },
+  {
+    label: 'Product launch poster',
+    mode: 'poster',
+    ratio: '1:1',
+    prompt:
+      'A bold launch ad for a new wireless earbud called "Echo Air". Big headline ("Hear everything. Tangled in nothing."), short sub-line about 36-hour battery life, a glowing CTA "Pre-order — $179", and the product floating with a soft halo. Punchy gradient backdrop.',
+  },
+  {
+    label: 'Story sale poster',
+    mode: 'poster',
+    ratio: '9:16',
+    prompt:
+      'An Instagram Story for a 48-hour coffee shop sale. Top: small "Flash sale" tag. Middle hero: "All lattes 30% off". Bottom: CTA "Tap to claim · ends Sunday". Animated steam rising. Warm, energetic palette.',
   },
 ];
 
@@ -91,9 +122,14 @@ function ForgeUiPageInner() {
   const [mode, setMode] = useState<Mode>('page');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<ViewTab>('preview');
-  const [exporting, setExporting] = useState<'project' | null>(null);
+  const [exporting, setExporting] = useState<ExportState>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
+
+  // Poster-only state
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
+  const [brand, setBrand] = useState<Brand>(EMPTY_BRAND);
 
   // History drawer state
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -173,8 +209,13 @@ function ForgeUiPageInner() {
           mode: string;
           provider: string;
           model: string;
+          aspectRatio?: string | null;
+          brandColor?: string | null;
+          logoUrl?: string | null;
+          productUrl?: string | null;
         };
-        const loadedMode: Mode = gen.mode === 'slides' ? 'slides' : 'page';
+        const loadedMode: Mode =
+          gen.mode === 'slides' ? 'slides' : gen.mode === 'poster' ? 'poster' : 'page';
         const userTurnId = `u_${Date.now()}`;
         const assistantTurnId = `a_${Date.now() + 1}`;
         setTurns([
@@ -190,11 +231,25 @@ function ForgeUiPageInner() {
               html: gen.html,
               provider: gen.provider,
               model: gen.model,
+              aspectRatio: (gen.aspectRatio as AspectRatio | null) ?? null,
+              brandColor: gen.brandColor ?? null,
+              logoUrl: gen.logoUrl ?? null,
+              productUrl: gen.productUrl ?? null,
             },
             sourceUserId: userTurnId,
           },
         ]);
         setMode(loadedMode);
+        if (loadedMode === 'poster') {
+          if (gen.aspectRatio && ['1:1', '4:5', '9:16', '16:9'].includes(gen.aspectRatio)) {
+            setAspectRatio(gen.aspectRatio as AspectRatio);
+          }
+          setBrand({
+            color: gen.brandColor || '',
+            logoDataUrl: gen.logoUrl || '',
+            productDataUrl: gen.productUrl || '',
+          });
+        }
         setView('preview');
         setShowPreviewMobile(true);
         setHistoryOpen(false);
@@ -272,7 +327,19 @@ function ForgeUiPageInner() {
       const res = await apiFetch('/api/ui/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, mode: useMode, baseJsx }),
+        body: JSON.stringify({
+          prompt: text,
+          mode: useMode,
+          baseJsx,
+          ...(useMode === 'poster'
+            ? {
+                aspectRatio,
+                brandColor: brand.color || null,
+                logoDataUrl: brand.logoDataUrl || null,
+                productDataUrl: brand.productDataUrl || null,
+              }
+            : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Generation failed');
@@ -324,48 +391,65 @@ function ForgeUiPageInner() {
     setShowPreviewMobile(false);
   };
 
-  const downloadHtml = () => {
-    if (!current) return;
-    const blob = new Blob([current.html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${slug(current.title)}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
-  const downloadProject = async () => {
-    if (!current || exporting) return;
-    setExporting('project');
-    try {
-      const res = await fetch(apiUrl('/api/ui/export-project'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ jsx: current.jsx, title: current.title }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `Export failed (${res.status})`);
+  const runExport = useCallback(
+    async (kind: ExportKind) => {
+      if (!current || exporting) return;
+      const isPoster = mode === 'poster';
+      const ratio: AspectRatio = (current.aspectRatio as AspectRatio) || aspectRatio;
+      const baseName = slug(current.title);
+      setExportError(null);
+      setExporting({ kind, stage: 'starting' });
+      try {
+        if (kind === 'html') {
+          const blob = new Blob([current.html], { type: 'text/html;charset=utf-8' });
+          downloadBlob(blob, `${baseName}.html`);
+        } else if (kind === 'project') {
+          const res = await fetch(apiUrl('/api/ui/export-project'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              jsx: current.jsx,
+              title: current.title,
+              brandColor: current.brandColor ?? null,
+              logoDataUrl: current.logoUrl ?? null,
+              productDataUrl: current.productUrl ?? null,
+            }),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || `Export failed (${res.status})`);
+          }
+          const blob = await res.blob();
+          downloadBlob(blob, `${baseName}.zip`);
+        } else if (kind === 'png') {
+          if (!isPoster) throw new Error('PNG export is only available for posters.');
+          await exportPosterPng({ html: current.html, ratio, filename: `${baseName}.png` });
+        } else if (kind === 'gif') {
+          if (!isPoster) throw new Error('GIF export is only available for posters.');
+          await exportPosterGif({
+            html: current.html,
+            ratio,
+            filename: `${baseName}.gif`,
+            onProgress: (pct, stage) => setExporting({ kind, stage, pct }),
+          });
+        } else if (kind === 'video') {
+          if (!isPoster) throw new Error('Video export is only available for posters.');
+          await exportPosterVideo({
+            html: current.html,
+            ratio,
+            filename: `${baseName}`,
+            onProgress: (pct) => setExporting({ kind, stage: 'recording', pct }),
+          });
+        }
+      } catch (e) {
+        setExportError(e instanceof Error ? e.message : 'Export failed.');
+      } finally {
+        setExporting(null);
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${slug(current.title)}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      // surfaced via the latest turn already, no need to mutate state
-    } finally {
-      setExporting(null);
-    }
-  };
+    },
+    [current, exporting, mode, aspectRatio],
+  );
 
   const copyJsx = async () => {
     if (!current) return;
@@ -475,27 +559,11 @@ function ForgeUiPageInner() {
           )}
 
           {current && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={downloadHtml}
-                className="h-8 px-3 rounded-md border border-white/10 bg-white/5 text-stone-300 text-sm hover:bg-white/10 hover:text-stone-100 transition flex items-center gap-1.5"
-                title="Download a single self-contained .html file"
-              >
-                <span>↓</span>
-                <span className="hidden md:inline">HTML</span>
-              </button>
-              <button
-                onClick={downloadProject}
-                disabled={exporting === 'project'}
-                className="h-8 px-3 rounded-md bg-[#cc785c] hover:bg-[#b86a51] text-white text-sm font-medium transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Download a runnable Vite + React + Tailwind project"
-              >
-                <span>{exporting === 'project' ? '…' : '⬇'}</span>
-                <span className="hidden md:inline">
-                  {exporting === 'project' ? 'Packing…' : 'Project'}
-                </span>
-              </button>
-            </div>
+            <ExportMenu
+              isPoster={mode === 'poster'}
+              busy={exporting}
+              onPick={(kind) => void runExport(kind)}
+            />
           )}
 
           <div className="text-xs text-stone-500 hidden lg:block truncate max-w-[140px]" title={user.email}>
@@ -517,7 +585,10 @@ function ForgeUiPageInner() {
             {!hasThread ? (
               <Welcome
                 mode={mode}
-                onPick={(p) => submit(p.prompt, p.mode)}
+                onPick={(p) => {
+                  if (p.mode === 'poster' && p.ratio) setAspectRatio(p.ratio);
+                  void submit(p.prompt, p.mode);
+                }}
               />
             ) : (
               <div className="px-4 sm:px-5 py-5 space-y-5 max-w-[640px] mx-auto">
@@ -536,7 +607,45 @@ function ForgeUiPageInner() {
 
           {/* Composer */}
           <div className="border-t border-white/5 bg-[#1f1c19] p-3 sm:p-4 shrink-0">
-            <div className="max-w-[640px] mx-auto">
+            <div className="max-w-[640px] mx-auto space-y-2.5">
+              {/* Poster-only inputs slide in from above when poster mode is active */}
+              <div
+                className={`overflow-hidden transition-all duration-300 ease-out ${
+                  mode === 'poster' ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0'
+                }`}
+                aria-hidden={mode !== 'poster'}
+              >
+                <div className="space-y-2.5 pb-1">
+                  <div className="flex items-center justify-between">
+                    <AspectRatioChips
+                      value={aspectRatio}
+                      onChange={setAspectRatio}
+                      disabled={hasThread}
+                    />
+                    {hasThread && (
+                      <span className="text-[10px] text-stone-600">Ratio locked in thread</span>
+                    )}
+                  </div>
+                  <BrandInputsPanel value={brand} onChange={setBrand} disabled={busy} />
+                </div>
+              </div>
+
+              {exportError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300 flex items-center justify-between gap-2 animate-forge-fade-in-fast">
+                  <span>Export failed: {exportError}</span>
+                  <button
+                    onClick={() => setExportError(null)}
+                    className="text-red-300/70 hover:text-red-200 transition"
+                  >
+                    ✕
+                  </button>
+                  <style>{`
+                    @keyframes forge-fade-in-fast { 0% { opacity: 0; transform: translateY(-4px); } 100% { opacity: 1; transform: translateY(0); } }
+                    .animate-forge-fade-in-fast { animation: forge-fade-in-fast 0.2s ease-out; }
+                  `}</style>
+                </div>
+              )}
+
               <div className="rounded-xl border border-white/10 bg-[#2a2622] focus-within:border-[#cc785c]/50 transition">
                 <textarea
                   ref={textareaRef}
@@ -553,6 +662,8 @@ function ForgeUiPageInner() {
                       ? 'Ask for a change… (e.g. "make the hero darker", "add a testimonials section")'
                       : mode === 'slides'
                       ? 'Describe a deck — topic, audience, key points…'
+                      : mode === 'poster'
+                      ? 'Describe the ad — product, headline, vibe, CTA…'
                       : 'Describe a UI — page type, sections, content, audience…'
                   }
                   rows={1}
@@ -571,6 +682,12 @@ function ForgeUiPageInner() {
                       label="Slides"
                       active={mode === 'slides'}
                       onClick={() => setMode('slides')}
+                      disabled={hasThread}
+                    />
+                    <ModeChip
+                      label="Poster"
+                      active={mode === 'poster'}
+                      onClick={() => setMode('poster')}
                       disabled={hasThread}
                     />
                   </div>
@@ -673,13 +790,22 @@ function ForgeUiPageInner() {
             )}
             {busy && !current && <LoadingForge mode={mode} />}
             {current && view === 'preview' && (
-              <iframe
-                key={current.jsx.length + ':' + current.title}
-                title="Preview"
-                srcDoc={current.html}
-                sandbox="allow-scripts"
-                className="absolute inset-0 w-full h-full bg-white"
-              />
+              mode === 'poster' ? (
+                <PosterPreviewFrame
+                  html={current.html}
+                  title={current.title}
+                  jsxKey={current.jsx.length}
+                  ratio={(current.aspectRatio as AspectRatio) || aspectRatio}
+                />
+              ) : (
+                <iframe
+                  key={current.jsx.length + ':' + current.title}
+                  title="Preview"
+                  srcDoc={current.html}
+                  sandbox="allow-scripts"
+                  className="absolute inset-0 w-full h-full bg-white"
+                />
+              )
             )}
             {busy && current && (
               <div className="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-lg bg-[#1a1715]/90 border border-white/10 text-[11px] text-stone-300 flex items-center gap-2 shadow-lg">
@@ -715,6 +841,70 @@ function ForgeUiPageInner() {
 }
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
+
+// Renders the poster iframe inside a constrained, centered frame at the
+// chosen aspect ratio. The iframe is rendered at the target export pixel
+// dimensions (e.g. 1080×1080 for 1:1) and then scaled to fit the visible
+// area with CSS transform — that way the preview is pixel-accurate and
+// matches what gets exported.
+function PosterPreviewFrame({
+  html,
+  title,
+  jsxKey,
+  ratio,
+}: {
+  html: string;
+  title: string;
+  jsxKey: number;
+  ratio: AspectRatio;
+}) {
+  const { width, height } = aspectDimensions(ratio);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const rect = el.getBoundingClientRect();
+      // Leave a tasteful 24px gutter so the frame doesn't kiss the panel edges.
+      const availW = rect.width - 48;
+      const availH = rect.height - 48;
+      if (availW <= 0 || availH <= 0) return;
+      const next = Math.min(availW / width, availH / height);
+      setScale(next > 0 ? next : 1);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [width, height]);
+
+  return (
+    <div
+      ref={wrapRef}
+      className="absolute inset-0 grid place-items-center overflow-hidden"
+      style={{ background: 'radial-gradient(circle at 50% 30%, #1a1715 0%, #0e0c0b 70%)' }}
+    >
+      <div
+        className="bg-white rounded-lg shadow-2xl overflow-hidden transition-all duration-400 ease-out"
+        style={{
+          width: width,
+          height: height,
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+        }}
+      >
+        <iframe
+          key={`${jsxKey}:${ratio}`}
+          title={title}
+          srcDoc={html}
+          sandbox="allow-scripts"
+          className="block w-full h-full"
+          style={{ border: 0 }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function HistoryDrawer({
   open,
@@ -872,10 +1062,22 @@ function HistoryRow({
             <div className="text-[11px] text-stone-500 mt-0.5 line-clamp-2 leading-snug">
               {item.prompt}
             </div>
-            <div className="text-[10px] text-stone-600 mt-1.5 flex items-center gap-1.5">
+            <div className="text-[10px] text-stone-600 mt-1.5 flex items-center gap-1.5 flex-wrap">
               <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 uppercase tracking-wider">
                 {item.mode}
               </span>
+              {item.mode === 'poster' && item.aspectRatio && (
+                <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 font-mono">
+                  {item.aspectRatio}
+                </span>
+              )}
+              {item.brandColor && (
+                <span
+                  className="w-3 h-3 rounded-full border border-white/20"
+                  style={{ background: item.brandColor }}
+                  title={item.brandColor}
+                />
+              )}
               {item.isRefine && <span className="text-stone-500">refine</span>}
               <span>·</span>
               <span>{relativeTime(item.createdAt)}</span>
@@ -1088,7 +1290,9 @@ function Welcome({
 
       <div className="text-[11px] text-stone-600 text-center">
         Currently selected mode:{' '}
-        <span className="text-stone-400 font-medium">{mode === 'slides' ? 'Slides' : 'Page'}</span>
+        <span className="text-stone-400 font-medium">
+          {mode === 'slides' ? 'Slides' : mode === 'poster' ? 'Poster' : 'Page'}
+        </span>
         {' '}— change it in the composer below.
       </div>
     </div>
@@ -1270,6 +1474,17 @@ function SlidesWireframe() {
 }
 
 // ─── Util ────────────────────────────────────────────────────────────────────
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 function slug(s: string): string {
   return (s || 'forge-ui')

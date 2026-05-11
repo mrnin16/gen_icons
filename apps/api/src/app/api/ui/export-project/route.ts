@@ -13,7 +13,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Sign in to export projects' }, { status: 401 });
   }
 
-  let body: { jsx?: string; title?: string };
+  let body: {
+    jsx?: string;
+    title?: string;
+    brandColor?: string;
+    logoDataUrl?: string;
+    productDataUrl?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -22,6 +28,9 @@ export async function POST(req: NextRequest) {
 
   const jsx = (body.jsx || '').trim();
   const title = (body.title || 'forge-ui-app').trim() || 'forge-ui-app';
+  const brandColor = (body.brandColor || '').trim() || null;
+  const logoUrl = (body.logoDataUrl || '').trim() || null;
+  const productUrl = (body.productDataUrl || '').trim() || null;
   if (!jsx) return NextResponse.json({ error: 'jsx required' }, { status: 400 });
   if (!/function\s+App\s*\(/.test(jsx)) {
     return NextResponse.json({ error: 'jsx must define a function App' }, { status: 400 });
@@ -44,7 +53,7 @@ export async function POST(req: NextRequest) {
   const src = root.folder('src')!;
   src.file('main.jsx', MAIN_JSX);
   src.file('index.css', INDEX_CSS);
-  src.file('App.jsx', appJsxFile(jsx));
+  src.file('App.jsx', appJsxFile(jsx, { color: brandColor, logoUrl, productUrl }));
 
   const blob = await zip.generateAsync({ type: 'uint8array' });
 
@@ -150,8 +159,17 @@ dist
 .env.local
 `;
 
-function appJsxFile(jsx: string): string {
+type ExportBrand = { color: string | null; logoUrl: string | null; productUrl: string | null };
+
+function appJsxFile(jsx: string, brand: ExportBrand): string {
+  // Posters reference BRAND_COLOR / LOGO_URL / PRODUCT_URL as global string
+  // constants. We inline the actual values here so the exported project is
+  // fully self-contained — the user can edit src/App.jsx to swap branding.
   return `import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect, useReducer } from 'react';
+
+const BRAND_COLOR = ${JSON.stringify(brand.color ?? '')};
+const LOGO_URL = ${JSON.stringify(brand.logoUrl ?? '')};
+const PRODUCT_URL = ${JSON.stringify(brand.productUrl ?? '')};
 
 ${jsx}
 
