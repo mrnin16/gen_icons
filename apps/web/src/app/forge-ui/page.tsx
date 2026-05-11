@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { apiFetch, apiUrl } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -14,11 +14,23 @@ type Mode = 'page' | 'slides';
 type ViewTab = 'preview' | 'code';
 
 type GenerationData = {
+  id?: string | null;
   title: string;
   jsx: string;
   html: string;
   provider: string;
   model: string;
+};
+
+type HistoryItem = {
+  id: string;
+  title: string;
+  prompt: string;
+  mode: Mode;
+  isRefine: boolean;
+  provider: string;
+  model: string;
+  createdAt: string;
 };
 
 type Turn =
@@ -55,7 +67,22 @@ const STARTERS: { label: string; mode: Mode; prompt: string }[] = [
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ForgeUiPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#1a1715] grid place-items-center text-stone-400 text-sm">
+          Loading…
+        </div>
+      }
+    >
+      <ForgeUiPageInner />
+    </Suspense>
+  );
+}
+
+function ForgeUiPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
 
   const [authOpen, setAuthOpen] = useState(false);
@@ -67,6 +94,13 @@ export default function ForgeUiPage() {
   const [exporting, setExporting] = useState<'project' | null>(null);
   const [copied, setCopied] = useState(false);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
+
+  // History drawer state
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const threadRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -99,6 +133,109 @@ export default function ForgeUiPage() {
     const h = Math.min(ta.scrollHeight, 280);
     ta.style.height = h + 'px';
   }, [draft]);
+
+  const refreshHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await apiFetch('/api/ui/generations?limit=30');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load history');
+      setHistoryItems((data.items || []) as HistoryItem[]);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : 'Failed to load history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // Fetch history the first time the drawer opens.
+  useEffect(() => {
+    if (historyOpen) void refreshHistory();
+  }, [historyOpen, refreshHistory]);
+
+  // Load a saved generation as the new baseline. Refines from this point save
+  // as fresh rows (the original entry is never touched).
+  const loadGeneration = useCallback(
+    async (id: string) => {
+      if (busy || loadingId) return;
+      setLoadingId(id);
+      try {
+        const res = await apiFetch(`/api/ui/generations/${encodeURIComponent(id)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Failed to load');
+        const gen = data.generation as {
+          id: string;
+          title: string;
+          prompt: string;
+          jsx: string;
+          html: string;
+          mode: string;
+          provider: string;
+          model: string;
+        };
+        const loadedMode: Mode = gen.mode === 'slides' ? 'slides' : 'page';
+        const userTurnId = `u_${Date.now()}`;
+        const assistantTurnId = `a_${Date.now() + 1}`;
+        setTurns([
+          { id: userTurnId, role: 'user', text: gen.prompt, mode: loadedMode, isRefine: false },
+          {
+            id: assistantTurnId,
+            role: 'assistant',
+            status: 'ok',
+            data: {
+              id: gen.id,
+              title: gen.title,
+              jsx: gen.jsx,
+              html: gen.html,
+              provider: gen.provider,
+              model: gen.model,
+            },
+            sourceUserId: userTurnId,
+          },
+        ]);
+        setMode(loadedMode);
+        setView('preview');
+        setShowPreviewMobile(true);
+        setHistoryOpen(false);
+      } catch (e) {
+        setHistoryError(e instanceof Error ? e.message : 'Failed to load');
+      } finally {
+        setLoadingId(null);
+      }
+    },
+    [busy, loadingId],
+  );
+
+  const deleteHistoryItem = useCallback(async (id: string) => {
+    try {
+      const res = await apiFetch(`/api/ui/generations/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Failed to delete');
+      }
+      setHistoryItems((prev) => prev.filter((h) => h.id !== id));
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : 'Failed to delete');
+    }
+  }, []);
+
+  // Honor ?load=<id> on first mount (used by /forge-ui/history → editor handoff).
+  // Strip the param from the URL after loading so a refresh doesn't replay it.
+  const loadParamHandledRef = useRef(false);
+  useEffect(() => {
+    if (loadParamHandledRef.current) return;
+    if (authLoading || !user) return;
+    const id = searchParams.get('load');
+    if (!id) return;
+    loadParamHandledRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot URL handoff: load the requested entry then clean the query param.
+    void loadGeneration(id).then(() => {
+      router.replace('/forge-ui');
+    });
+  }, [authLoading, user, searchParams, loadGeneration, router]);
 
   const submit = async (overridePrompt?: string, overrideMode?: Mode) => {
     const text = (overridePrompt ?? draft).trim();
@@ -146,6 +283,9 @@ export default function ForgeUiPage() {
             : t,
         ),
       );
+      // Refresh history if the drawer is open so the new entry appears at the
+      // top right away. If the drawer is closed, the next open will refetch.
+      if (historyOpen) void refreshHistory();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Generation failed';
       setTurns((prev) =>
@@ -301,6 +441,27 @@ export default function ForgeUiPage() {
           </nav>
 
           <div className="flex-1" />
+
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="h-8 px-3 rounded-md text-sm border border-white/10 bg-white/5 hover:bg-white/10 text-stone-300 hover:text-stone-100 transition flex items-center gap-1.5"
+            title="View history of past generations"
+          >
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <span className="hidden sm:inline">History</span>
+          </button>
+
+          <Link
+            href="/forge-ui/history"
+            className="hidden md:flex h-8 px-3 rounded-md text-sm text-stone-400 hover:bg-white/5 hover:text-stone-100 transition items-center"
+            title="Open the full history page"
+          >
+            All
+          </Link>
 
           {hasThread && (
             <button
@@ -536,11 +697,218 @@ export default function ForgeUiPage() {
           </div>
         </section>
       </div>
+
+      {/* ───── History drawer ──────────────────────────────────────────────── */}
+      <HistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        items={historyItems}
+        loading={historyLoading}
+        error={historyError}
+        loadingId={loadingId}
+        onLoad={(id) => void loadGeneration(id)}
+        onDelete={(id) => void deleteHistoryItem(id)}
+        onRefresh={() => void refreshHistory()}
+      />
     </div>
   );
 }
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
+
+function HistoryDrawer({
+  open,
+  onClose,
+  items,
+  loading,
+  error,
+  loadingId,
+  onLoad,
+  onDelete,
+  onRefresh,
+}: {
+  open: boolean;
+  onClose: () => void;
+  items: HistoryItem[];
+  loading: boolean;
+  error: string | null;
+  loadingId: string | null;
+  onLoad: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRefresh: () => void;
+}) {
+  // Close on Escape for keyboard users.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  return (
+    <>
+      <div
+        className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onClose}
+        aria-hidden={!open}
+      />
+      <aside
+        className={`fixed top-0 right-0 z-50 h-screen w-full sm:w-[420px] bg-[#1a1715] border-l border-white/10 shadow-2xl flex flex-col transform transition-transform ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        role="dialog"
+        aria-label="Generation history"
+        aria-hidden={!open}
+      >
+        <div className="h-12 sm:h-14 px-4 sm:px-5 border-b border-white/5 flex items-center gap-2 shrink-0">
+          <div className="text-sm font-semibold text-stone-100">History</div>
+          <div className="flex-1" />
+          <button
+            onClick={onRefresh}
+            disabled={loading}
+            className="h-7 w-7 grid place-items-center rounded-md text-stone-400 hover:text-stone-100 hover:bg-white/5 transition disabled:opacity-40"
+            title="Refresh"
+          >
+            <svg viewBox="0 0 24 24" className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-3-6.7" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
+          <Link
+            href="/forge-ui/history"
+            onClick={onClose}
+            className="h-7 px-2.5 rounded-md text-[11px] text-stone-400 hover:text-stone-100 hover:bg-white/5 transition flex items-center"
+            title="Open the full history page"
+          >
+            All →
+          </Link>
+          <button
+            onClick={onClose}
+            className="h-7 w-7 grid place-items-center rounded-md text-stone-400 hover:text-stone-100 hover:bg-white/5 transition"
+            title="Close (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scroll-thin">
+          {loading && items.length === 0 && (
+            <div className="px-5 py-10 text-center text-sm text-stone-500">Loading…</div>
+          )}
+          {error && (
+            <div className="px-5 py-4 mx-4 mt-4 rounded-lg border border-red-500/30 bg-red-500/10 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+          {!loading && !error && items.length === 0 && (
+            <div className="px-5 py-10 text-center space-y-1.5">
+              <div className="text-2xl">🗂️</div>
+              <div className="text-sm text-stone-300">No saved generations yet</div>
+              <div className="text-[11px] text-stone-500">
+                Successful generations are saved here automatically.
+              </div>
+            </div>
+          )}
+          {items.length > 0 && (
+            <ul className="px-3 py-3 space-y-1.5">
+              {items.map((it) => (
+                <li key={it.id}>
+                  <HistoryRow
+                    item={it}
+                    isLoading={loadingId === it.id}
+                    disabled={!!loadingId && loadingId !== it.id}
+                    onLoad={() => onLoad(it.id)}
+                    onDelete={() => onDelete(it.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function HistoryRow({
+  item,
+  isLoading,
+  disabled,
+  onLoad,
+  onDelete,
+}: {
+  item: HistoryItem;
+  isLoading: boolean;
+  disabled: boolean;
+  onLoad: () => void;
+  onDelete: () => void;
+}) {
+  const [confirmDel, setConfirmDel] = useState(false);
+  useEffect(() => {
+    if (!confirmDel) return;
+    const id = setTimeout(() => setConfirmDel(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmDel]);
+
+  return (
+    <div
+      className={`group relative rounded-lg border border-white/8 bg-[#23201d] hover:bg-[#2a2622] hover:border-white/15 transition px-3 py-2.5 ${
+        disabled ? 'opacity-50 pointer-events-none' : ''
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onLoad}
+        disabled={isLoading}
+        className="block w-full text-left"
+      >
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-stone-100 truncate">{item.title}</div>
+            <div className="text-[11px] text-stone-500 mt-0.5 line-clamp-2 leading-snug">
+              {item.prompt}
+            </div>
+            <div className="text-[10px] text-stone-600 mt-1.5 flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 uppercase tracking-wider">
+                {item.mode}
+              </span>
+              {item.isRefine && <span className="text-stone-500">refine</span>}
+              <span>·</span>
+              <span>{relativeTime(item.createdAt)}</span>
+            </div>
+          </div>
+          <div className="shrink-0 text-[11px] text-stone-500 group-hover:text-[#e89472] transition mt-0.5">
+            {isLoading ? '…' : '→'}
+          </div>
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (confirmDel) {
+            onDelete();
+            setConfirmDel(false);
+          } else {
+            setConfirmDel(true);
+          }
+        }}
+        className={`absolute top-2 right-2 h-6 px-1.5 rounded text-[10px] transition ${
+          confirmDel
+            ? 'bg-red-500/30 text-red-200 opacity-100'
+            : 'bg-white/5 text-stone-500 hover:text-red-300 hover:bg-red-500/20 opacity-0 group-hover:opacity-100'
+        }`}
+        title={confirmDel ? 'Click again to confirm' : 'Delete'}
+      >
+        {confirmDel ? 'Sure?' : '✕'}
+      </button>
+    </div>
+  );
+}
 
 function ModeChip({
   label,
@@ -909,4 +1277,19 @@ function slug(s: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 60) || 'forge-ui';
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diff = Math.max(0, Date.now() - then);
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
 }

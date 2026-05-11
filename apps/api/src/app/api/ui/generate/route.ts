@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { generateTextWithFallback, modelFor } from '@/lib/ai-providers';
 import {
@@ -109,13 +110,39 @@ export async function POST(req: NextRequest) {
 
     const title = deriveTitle(prompt);
     const html = wrapAsHtmlDoc(jsx, title);
+    const providerUsed = result.providerUsed;
+    const modelUsed = modelFor(providerUsed);
+
+    // Auto-save the generation so the user can find it later in history.
+    // Save failures must NOT fail the request — the user still gets their UI.
+    let savedId: string | null = null;
+    try {
+      const saved = await prisma.uiGeneration.create({
+        data: {
+          userId: user.id,
+          title,
+          prompt,
+          jsx,
+          html,
+          mode,
+          isRefine,
+          provider: providerUsed,
+          model: modelUsed,
+        },
+        select: { id: true },
+      });
+      savedId = saved.id;
+    } catch (err) {
+      console.error('UI generation auto-save failed:', err);
+    }
 
     return NextResponse.json({
+      id: savedId,
       title,
       jsx,
       html,
-      provider: result.providerUsed,
-      model: modelFor(result.providerUsed),
+      provider: providerUsed,
+      model: modelUsed,
     });
   } catch (error) {
     console.error('UI generation error:', error);

@@ -40,11 +40,30 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  passwordHash String
-  role         Role     @default(USER)
-  icons        Icon[]
-  createdAt    DateTime @default(now())
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  passwordHash  String
+  role          Role           @default(USER)
+  icons         Icon[]
+  uiGenerations UiGeneration[]
+  createdAt     DateTime       @default(now())
+}
+
+model UiGeneration {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  prompt    String   @db.Text
+  jsx       String   @db.Text
+  html      String   @db.Text
+  mode      String
+  isRefine  Boolean  @default(false)
+  provider  String
+  model     String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
 }
